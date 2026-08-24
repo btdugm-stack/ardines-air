@@ -1,0 +1,300 @@
+{
+  "analysis_metadata": {
+    "report_date": "2026-08-24",
+    "repository": "btdugm-stack/ardines-air",
+    "total_files_analyzed": 49,
+    "analysis_type": "comprehensive_usage_audit"
+  },
+  "summary": {
+    "total_files": 49,
+    "actively_used": 44,
+    "partially_used": 3,
+    "dead_code": 2,
+    "health_score": "B+",
+    "health_percentage": 85
+  },
+  "critical_findings": {
+    "dead_code": [
+      {
+        "file": "app/chatgpt-auth.ts",
+        "severity": "HIGH",
+        "lines": 87,
+        "problem": "Completely unused - no imports found in entire codebase",
+        "exports": [
+          "getChatGPTUser",
+          "requireChatGPTUser",
+          "chatGPTSignInPath",
+          "chatGPTSignOutPath"
+        ],
+        "references_count": 0,
+        "action": "DELETE",
+        "effort_minutes": 1,
+        "breaking_changes": 0,
+        "reason": "Current auth flow uses hardcoded sessions, not OAuth. Can be restored later if needed."
+      }
+    ],
+    "unused_exports": [
+      {
+        "file": "db/index.ts",
+        "export": "getDb()",
+        "severity": "MEDIUM",
+        "problem": "Exported but never imported",
+        "current_usage": "0",
+        "should_be_used_in": "app/api/app/route.ts",
+        "action": "REFACTOR",
+        "effort_minutes": 2,
+        "breaking_changes": 0,
+        "recommendation": "Update API route to use getDb() helper instead of direct drizzle() call"
+      }
+    ],
+    "example_code": [
+      {
+        "directory": "examples/d1/",
+        "files": [
+          "app/api/notes/route.ts",
+          "db/schema.ts"
+        ],
+        "severity": "LOW",
+        "problem": "Reference/example code not used in production",
+        "lines": 68,
+        "action": "MOVE_OR_DELETE",
+        "effort_minutes": 3,
+        "options": [
+          "Move to docs/examples/d1",
+          "Delete if not needed",
+          "Keep but clearly mark in README"
+        ],
+        "recommendation": "Move to docs/"
+      }
+    ]
+  },
+  "entry_points": {
+    "web_ui": {
+      "file": "app/page.tsx",
+      "imports": "app/store-app.tsx",
+      "status": "ACTIVE"
+    },
+    "workers_runtime": {
+      "file": "worker/index.ts",
+      "imports": "vinext handlers",
+      "status": "ACTIVE"
+    },
+    "api_route": {
+      "file": "app/api/app/route.ts",
+      "imports": "lib/business.ts",
+      "missing_import": "db/index.ts",
+      "status": "ACTIVE_WITH_ISSUE"
+    }
+  },
+  "dependency_analysis": {
+    "circular_dependencies": 0,
+    "unused_imports_total": 0,
+    "unused_exports_total": 1,
+    "broken_imports": 0,
+    "import_chains": {
+      "good": [
+        "app/store-app.tsx -> lib/business.ts",
+        "app/api/app/route.ts -> lib/business.ts",
+        "worker/index.ts -> vinext"
+      ],
+      "bad": [
+        "app/api/app/route.ts -> direct drizzle() instead of db/index.ts getDb()"
+      ]
+    }
+  },
+  "file_categories": {
+    "core_application": {
+      "count": 5,
+      "files": [
+        "app/store-app.tsx",
+        "app/api/app/route.ts",
+        "lib/business.ts",
+        "db/schema.ts",
+        "app/globals.css"
+      ],
+      "status": "CRITICAL_ACTIVELY_USED"
+    },
+    "configuration": {
+      "count": 8,
+      "files": [
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "next.config.ts",
+        "drizzle.config.ts",
+        "postcss.config.mjs",
+        "eslint.config.mjs",
+        ".openai/hosting.json"
+      ],
+      "status": "ESSENTIAL"
+    },
+    "build_and_deployment": {
+      "count": 4,
+      "files": [
+        "scripts/build-verified.sh",
+        "scripts/install-ci.sh",
+        "scripts/sites-env.sh",
+        "build/sites-vite-plugin.ts"
+      ],
+      "status": "ACTIVELY_USED"
+    },
+    "database": {
+      "count": 3,
+      "files": [
+        "db/schema.ts",
+        "db/index.ts",
+        "drizzle/"
+      ],
+      "status": "ACTIVELY_USED"
+    },
+    "testing": {
+      "count": 2,
+      "files": [
+        "tests/business.test.mjs",
+        "tests/rendered-html.test.mjs"
+      ],
+      "status": "ACTIVELY_USED"
+    },
+    "documentation": {
+      "count": 5,
+      "files": [
+        "README.md",
+        "AUDIT-REPORT.md",
+        ".github/copilot-instructions.md",
+        "UI-ENHANCEMENT-REPORT.md",
+        "SUMMARY.md"
+      ],
+      "status": "REFERENCE"
+    },
+    "public_assets": {
+      "count": 6,
+      "files": [
+        "public/favicon.svg",
+        "public/og.png",
+        "public/file.svg",
+        "public/globe.svg",
+        "public/window.svg"
+      ],
+      "status": "REFERENCED"
+    },
+    "examples": {
+      "count": 2,
+      "files": [
+        "examples/d1/app/api/notes/route.ts",
+        "examples/d1/db/schema.ts"
+      ],
+      "status": "EXAMPLE_CODE"
+    },
+    "dead_code": {
+      "count": 1,
+      "files": [
+        "app/chatgpt-auth.ts"
+      ],
+      "status": "UNUSED"
+    }
+  },
+  "recommendations": {
+    "priority_1_immediate": [
+      {
+        "action": "Delete app/chatgpt-auth.ts",
+        "reason": "Dead code - no references found",
+        "effort": "1 minute",
+        "risk": "None - nothing uses it",
+        "impact": "Remove 87 lines of unused code",
+        "command": "rm app/chatgpt-auth.ts"
+      }
+    ],
+    "priority_2_soon": [
+      {
+        "action": "Refactor app/api/app/route.ts to use getDb()",
+        "reason": "Code quality - consolidate DB initialization",
+        "effort": "2 minutes",
+        "risk": "None - no behavior change",
+        "impact": "Better maintainability, consistent error handling",
+        "current": "const db = drizzle(env.DB, { schema });",
+        "proposed": "import { getDb } from '../../db'; const db = getDb();"
+      }
+    ],
+    "priority_3_consider": [
+      {
+        "action": "Organize examples/d1/",
+        "options": [
+          "Move to docs/examples/d1/",
+          "Delete if not needed",
+          "Keep but clearly mark as example code"
+        ],
+        "effort": "3 minutes",
+        "risk": "None - not production code",
+        "recommendation": "Move to docs/"
+      }
+    ]
+  },
+  "next_steps": {
+    "immediate_checklist": [
+      "Delete app/chatgpt-auth.ts",
+      "Refactor API route getDb() usage",
+      "Run npm test to verify no breaking changes",
+      "Git commit with clear message"
+    ],
+    "quality_improvements": [
+      "Move example files to docs/",
+      "Add .gitignore for example code if keeping",
+      "Document decision in git commit"
+    ],
+    "maintenance": [
+      "Review report: CODE-ANALYSIS-REPORT.md",
+      "Check UNUSED-FILES-QUICK-LIST.md",
+      "Plan next sprint cleanup"
+    ]
+  },
+  "metrics": {
+    "code_health": {
+      "score": 85,
+      "grade": "B+",
+      "breakdown": {
+        "actively_used": 85,
+        "partially_used": 6,
+        "dead_code": 4,
+        "missing_optimizations": 5
+      }
+    },
+    "file_sizes": {
+      "largest_files": [
+        {
+          "file": "app/globals.css",
+          "lines": 3453,
+          "status": "CRITICAL"
+        },
+        {
+          "file": "package-lock.json",
+          "lines": 11290,
+          "status": "AUTO_GENERATED"
+        },
+        {
+          "file": "app/api/app/route.ts",
+          "lines": 456,
+          "status": "CRITICAL"
+        },
+        {
+          "file": "app/store-app.tsx",
+          "lines": 254,
+          "status": "CRITICAL"
+        }
+      ]
+    },
+    "import_statistics": {
+      "total_imports": 47,
+      "external_packages": 12,
+      "internal_modules": 8,
+      "unused_imports": 0,
+      "broken_imports": 0
+    }
+  },
+  "git_actions": {
+    "cleanup_commands": [
+      "git rm app/chatgpt-auth.ts",
+      "git add app/api/app/route.ts",
+      "git commit -m 'refactor: remove dead code and consolidate DB initialization'"
+    ]
+  }
+}
