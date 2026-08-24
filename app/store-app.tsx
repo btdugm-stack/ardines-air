@@ -1,0 +1,254 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+
+type User = { id: string; name: string; email: string; role: "admin" | "member"; points: number };
+type Product = { id: string; sku: string; name: string; category: string; unit: string; price: number; stock: number; reserved: number; min_stock: number; accent: string };
+type OrderItem = { id?: number; product_id: string; product_name: string; unit: string; qty: number; unit_price: number; subtotal: number };
+type Order = { id: string; order_no: string; customer_name: string; phone: string; address: string; fulfillment: string; status: string; payment_status: string; payment_method: string; total: number; points_earned: number; created_at: string; items: OrderItem[] };
+type Expense = { id: string; category: string; description: string; amount: number; created_at: string };
+type AdminData = { user: User; orders: Order[]; products: Product[]; expenses: Expense[]; movements: Array<{ id: string; product_id: string; qty: number; movement_type: string; reference_id: string | null; reason: string; created_at: string }>; metrics: { revenue: number; completed: number; pending: number; expenses: number } };
+type MemberData = { user: User; orders: Order[]; ledger: Array<{ id: string; points: number; movement_type: string; created_at: string }> };
+type View = "shop" | "track" | "member" | "admin";
+
+const statusLabel: Record<string, string> = {
+  new: "Pesanan baru", confirmed: "Dikonfirmasi", preparing: "Disiapkan", ready: "Siap",
+  delivering: "Diantar", completed: "Selesai", cancelled: "Dibatalkan",
+  unpaid: "Belum dibayar", paid: "Lunas",
+};
+
+const statusNext: Record<string, { status: string; label: string }> = {
+  new: { status: "confirmed", label: "Konfirmasi" },
+  confirmed: { status: "preparing", label: "Mulai siapkan" },
+  preparing: { status: "ready", label: "Tandai siap" },
+  delivering: { status: "completed", label: "Selesaikan" },
+};
+
+const paymentMethodLabel: Record<string, string> = { cod: "COD", transfer: "Transfer", qris: "QRIS" };
+const movementLabel: Record<string, string> = { reserve: "Reservasi", sale: "Terjual", return: "Retur", adjustment: "Penyesuaian" };
+
+function money(value: number) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value); }
+function dateTime(value: string) { return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)); }
+
+async function callApi(path: string, init?: RequestInit) {
+  const response = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+  const data = await response.json() as Record<string, unknown>;
+  if (!response.ok) throw new Error(String(data.error ?? "Permintaan tidak dapat diproses."));
+  return data;
+}
+
+function Icon({ name, size = 20 }: { name: string; size?: number }) {
+  const paths: Record<string, React.ReactNode> = {
+    drop: <><path d="M12 2.5s-6 6.6-6 11a6 6 0 0 0 12 0c0-4.4-6-11-6-11Z"/><path d="M9 14a3 3 0 0 0 3 3"/></>,
+    cart: <><path d="M3 3h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20 7H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+    chart: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></>,
+    box: <><path d="m21 8-9 5-9-5 9-5 9 5Z"/><path d="m3 8 9 5v9l9-5V8"/></>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+    truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    minus: <><path d="M5 12h14"/></>,
+    logout: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 3h7v18h-7"/></>,
+    print: <><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></>,
+    wallet: <><path d="M3 6h16a2 2 0 0 1 2 2v11H3z"/><path d="M3 6V4h14v2M16 13h5"/></>,
+    check: <><path d="m5 12 4 4L19 6"/></>,
+    menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>,
+    edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></>,
+    trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></>,
+  };
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name] ?? paths.drop}</svg>;
+}
+
+export default function StoreApp() {
+  const [view, setView] = useState<View>("shop");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [category, setCategory] = useState("Semua");
+  const [query, setQuery] = useState("");
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
+  const [memberData, setMemberData] = useState<MemberData | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [receipt, setReceipt] = useState<Order | null>(null);
+
+  const loadStore = async () => {
+    try {
+      const data = await callApi("/api/app?view=store") as unknown as { products: Product[]; user: User | null };
+      setProducts(data.products); setUser(data.user);
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Gagal memuat toko."); }
+  };
+
+  useEffect(() => {
+    let active = true;
+    void callApi("/api/app?view=store")
+      .then((raw) => {
+        if (!active) return;
+        const data = raw as unknown as { products: Product[]; user: User | null };
+        setProducts(data.products); setUser(data.user);
+      })
+      .catch((error: unknown) => {
+        if (active) setNotice(error instanceof Error ? error.message : "Gagal memuat toko.");
+      });
+    return () => { active = false; };
+  }, []);
+
+  const navigate = async (next: View) => {
+    setView(next); setNotice("");
+    if (next === "admin") await loadAdmin();
+    if (next === "member") await loadMember();
+  };
+
+  const loadAdmin = async () => {
+    try { setAdminData(await callApi("/api/app?view=admin") as unknown as AdminData); }
+    catch { setAdminData(null); }
+  };
+  const loadMember = async () => {
+    try { setMemberData(await callApi("/api/app?view=member") as unknown as MemberData); }
+    catch { setMemberData(null); }
+  };
+
+  const cartItems = useMemo(() => products.filter((p) => cart[p.id]).map((p) => ({ ...p, qty: cart[p.id] })), [products, cart]);
+  const subtotal = cartItems.reduce((sum, p) => sum + p.price * p.qty, 0);
+  const cartCount = cartItems.reduce((sum, p) => sum + p.qty, 0);
+  const categories = ["Semua", ...Array.from(new Set(products.map((p) => p.category)))];
+  const visibleProducts = products.filter((p) => (category === "Semua" || p.category === category) && p.name.toLowerCase().includes(query.toLowerCase()));
+
+  const changeCart = (id: string, delta: number) => setCart((current) => {
+    const product = products.find((p) => p.id === id); const next = Math.max(0, Math.min((product?.stock ?? 0) - (product?.reserved ?? 0), (current[id] ?? 0) + delta));
+    const copy = { ...current }; if (next) copy[id] = next; else delete copy[id]; return copy;
+  });
+
+  const postAction = async (payload: Record<string, unknown>, after?: () => Promise<void>) => {
+    setBusy(true); setNotice("");
+    try {
+      const data = await callApi("/api/app", { method: "POST", body: JSON.stringify(payload) });
+      if (after) await after(); return data;
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Aksi gagal."); throw e; }
+    finally { setBusy(false); }
+  };
+
+  const logout = async () => {
+    await postAction({ action: "logout" }); setUser(null); setAdminData(null); setMemberData(null); setView("shop");
+  };
+
+  return (
+    <div className="app-shell">
+      <header className="site-header">
+        <button className="brand" onClick={() => void navigate("shop")}><span className="brand-mark"><Icon name="drop" /></span><span><strong>SEGAR.</strong><small>Depot air & es</small></span></button>
+        <nav className="desktop-nav" aria-label="Navigasi utama">
+          <button className={view === "shop" ? "active" : ""} onClick={() => void navigate("shop")}>Belanja</button>
+          <button className={view === "track" ? "active" : ""} onClick={() => void navigate("track")}>Lacak pesanan</button>
+          <button className={view === "member" ? "active" : ""} onClick={() => void navigate("member")}>Member</button>
+          <button className={view === "admin" ? "active" : ""} onClick={() => void navigate("admin")}>Admin</button>
+        </nav>
+        <div className="header-actions">
+          {user && <span className="user-pill"><span>{user.name.charAt(0)}</span>{user.name.split(" ")[0]}</span>}
+          {user && <button className="icon-button" title="Keluar" onClick={() => void logout()}><Icon name="logout" /></button>}
+          <button className="cart-button" onClick={() => setCheckoutOpen(true)}><Icon name="cart"/><span>Keranjang</span><b>{cartCount}</b></button>
+        </div>
+      </header>
+
+      <nav className="mobile-nav" aria-label="Navigasi utama">
+        <button className={view === "shop" ? "active" : ""} onClick={() => void navigate("shop")}><Icon name="search" /><span>Belanja</span></button>
+        <button className={view === "track" ? "active" : ""} onClick={() => void navigate("track")}><Icon name="truck" /><span>Lacak</span></button>
+        <button className={view === "member" ? "active" : ""} onClick={() => void navigate("member")}><Icon name="user" /><span>Member</span></button>
+        <button className={view === "admin" ? "active" : ""} onClick={() => void navigate("admin")}><Icon name="chart" /><span>Admin</span></button>
+      </nav>
+
+      {notice && <div className="global-notice" role="alert">{notice}<button onClick={() => setNotice("")}>×</button></div>}
+
+      {view === "shop" && <ShopView products={visibleProducts} categories={categories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} cart={cart} changeCart={changeCart} cartItems={cartItems} subtotal={subtotal} onCheckout={() => setCheckoutOpen(true)} />}
+      {view === "track" && <TrackView />}
+      {view === "member" && <MemberView data={memberData} user={user} busy={busy} login={async () => { await postAction({ action: "login_member_demo" }); await loadStore(); await loadMember(); }} logout={logout} shop={() => void navigate("shop")} />}
+      {view === "admin" && <AdminView data={adminData} user={user} busy={busy} login={async (email, password) => { await postAction({ action: "login_admin", email, password }); await loadStore(); await loadAdmin(); }} action={postAction} reload={loadAdmin} print={(order) => { setReceipt(order); setTimeout(() => window.print(), 180); }} />}
+
+      {checkoutOpen && <CheckoutModal items={cartItems} subtotal={subtotal} user={user} busy={busy} close={() => setCheckoutOpen(false)} submit={async (payload) => {
+        const data = await postAction({ action: "create_order", ...payload, items: cartItems.map((p) => ({ productId: p.id, qty: p.qty })) });
+        setCart({}); setCheckoutOpen(false); await loadStore(); setNotice(`Pesanan ${String(data.orderNo)} berhasil dibuat. Total ${money(Number(data.total))}.`);
+      }} />}
+      {receipt && <Receipt order={receipt} close={() => setReceipt(null)} />}
+
+      <footer><div><strong>SEGAR.</strong><p>Air jernih, urusan lebih ringan.</p></div><div><span>Buka setiap hari</span><b>07.00–21.00 WIB</b></div><div><span>Layanan pelanggan</span><b>0812-0000-SEGAR</b></div></footer>
+    </div>
+  );
+}
+
+function ShopView({ products, categories, category, setCategory, query, setQuery, cart, changeCart, cartItems, subtotal, onCheckout }: {
+  products: Product[]; categories: string[]; category: string; setCategory: (v: string) => void; query: string; setQuery: (v: string) => void;
+  cart: Record<string, number>; changeCart: (id: string, d: number) => void; cartItems: Array<Product & { qty: number }>; subtotal: number; onCheckout: () => void;
+}) {
+  return <main>
+    <section className="hero">
+      <div className="hero-copy"><div className="eyebrow"><span></span>Antar cepat di sekitar Anda</div><h1>Stok air aman.<br/><em>Hidup lanjut.</em></h1><p>Air galon, air botol, dan es batu segar untuk rumah maupun usaha. Bisa ecer, bisa langsung diantar.</p><div className="hero-actions"><button className="primary" onClick={() => document.getElementById("katalog")?.scrollIntoView({ behavior: "smooth" })}>Belanja sekarang <span>→</span></button><div className="mini-proof"><span>✓</span><p><b>Tanpa login</b><small>Pesan dalam 1 menit</small></p></div></div><div className="hero-stats"><div><b>30–45</b><span>menit estimasi antar</span></div><div><b>7 hari</b><span>siap melayani</span></div><div><b>120+</b><span>pelanggan rutin</span></div></div></div>
+      <div className="hero-visual"><Image src="/og.png" width={1675} height={942} priority alt="Layanan antar air mineral galon, botol, dan es batu"/><div className="floating-card"><span className="pulse"></span><p><b>Toko sedang buka</b><small>Pesan sebelum 20.30 WIB</small></p></div></div>
+    </section>
+    <section className="service-strip"><div><Icon name="truck"/><p><b>Antar cepat</b><span>Area sekitar toko</span></p></div><div><Icon name="check"/><p><b>Stok terpantau</b><span>Info tersedia real-time</span></p></div><div><Icon name="wallet"/><p><b>Bayar fleksibel</b><span>Tunai, transfer, QRIS</span></p></div></section>
+    <section className="catalog-section" id="katalog"><div className="section-heading"><div><span className="kicker">PILIH KEBUTUHANMU</span><h2>Segar sampai tujuan.</h2></div><label className="search-box"><Icon name="search"/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari produk..." /></label></div>
+      <div className="category-row">{categories.map((c) => <button key={c} className={category === c ? "active" : ""} onClick={() => setCategory(c)}>{c}</button>)}</div>
+      <div className="shop-grid"><div className="product-grid">{products.map((p) => <ProductCard key={p.id} product={p} qty={cart[p.id] ?? 0} change={changeCart}/>)}</div>
+        <aside className="cart-panel"><div className="cart-title"><div><span>Pesananmu</span><b>{cartItems.length} produk</b></div><Icon name="cart"/></div>{cartItems.length === 0 ? <div className="empty-cart"><span>◌</span><b>Keranjang masih ringan</b><p>Pilih air atau es yang kamu butuhkan.</p></div> : <div className="cart-lines">{cartItems.map((p) => <div className="cart-line" key={p.id}><span className="line-dot" style={{ background: p.accent }}></span><div><b>{p.name}</b><small>{money(p.price)} / {p.unit}</small></div><strong>{p.qty}×</strong></div>)}</div>}<div className="cart-summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Ongkir dihitung saat checkout</small><button className="primary full" disabled={!cartItems.length} onClick={onCheckout}>Lanjut pesan <span>→</span></button></div></aside>
+      </div>
+    </section>
+  </main>;
+}
+
+function ProductCard({ product, qty, change }: { product: Product; qty: number; change: (id: string, d: number) => void }) {
+  const available = product.stock - product.reserved; const icon = product.category === "Es Batu" ? "❄" : product.unit === "botol" ? "♢" : "◉";
+  return <article className="product-card"><div className="product-art" style={{ "--accent": product.accent } as React.CSSProperties}><span>{icon}</span><small>{product.category}</small><i>{available <= product.min_stock ? "Stok terbatas" : "Tersedia"}</i></div><div className="product-info"><span className="sku">{product.sku}</span><h3>{product.name}</h3><p><b>{money(product.price)}</b><span>/ {product.unit}</span></p><div className="product-bottom"><small>Sisa {available} {product.unit}</small>{qty ? <div className="stepper"><button onClick={() => change(product.id, -1)}><Icon name="minus" size={16}/></button><b>{qty}</b><button onClick={() => change(product.id, 1)}><Icon name="plus" size={16}/></button></div> : <button className="add-button" disabled={available < 1} onClick={() => change(product.id, 1)}><Icon name="plus" size={17}/> Tambah</button>}</div></div></article>;
+}
+
+function CheckoutModal({ items, subtotal, user, busy, close, submit }: { items: Array<Product & { qty: number }>; subtotal: number; user: User | null; busy: boolean; close: () => void; submit: (p: Record<string, unknown>) => Promise<void> }) {
+  const [form, setForm] = useState({ customerName: user?.name ?? "", phone: "", fulfillment: "delivery", address: "", paymentMethod: "cod" });
+  const shipping = form.fulfillment === "delivery" ? 5000 : 0;
+  const onSubmit = async (e: FormEvent) => { e.preventDefault(); try { await submit(form); } catch {} };
+  return <div className="modal-backdrop"><section className="modal checkout-modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={close}>×</button><div className="modal-head"><span className="kicker">CHECKOUT</span><h2>Selesaikan pesanan</h2><p>Tidak perlu akun. Kami hanya butuh detail pengantaran.</p></div><form onSubmit={(e) => void onSubmit(e)}><div className="checkout-columns"><div className="form-stack"><label>Nama pelanggan<input required value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} placeholder="Nama lengkap" /></label><label>Nomor WhatsApp<input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="08xxxxxxxxxx" /></label><div><span className="field-label">Cara menerima</span><div className="choice-row"><button type="button" className={form.fulfillment === "delivery" ? "selected" : ""} onClick={() => setForm({ ...form, fulfillment: "delivery" })}><Icon name="truck"/> Diantar</button><button type="button" className={form.fulfillment === "pickup" ? "selected" : ""} onClick={() => setForm({ ...form, fulfillment: "pickup" })}><Icon name="box"/> Ambil sendiri</button></div></div><div><span className="field-label">Metode pembayaran</span><div className="choice-row"><button type="button" className={form.paymentMethod === "cod" ? "selected" : ""} onClick={() => setForm({ ...form, paymentMethod: "cod" })}><Icon name="wallet"/> Tunai (COD)</button><button type="button" className={form.paymentMethod === "transfer" ? "selected" : ""} onClick={() => setForm({ ...form, paymentMethod: "transfer" })}><Icon name="wallet"/> Transfer</button><button type="button" className={form.paymentMethod === "qris" ? "selected" : ""} onClick={() => setForm({ ...form, paymentMethod: "qris" })}><Icon name="wallet"/> QRIS</button></div></div>{form.fulfillment === "delivery" && <label>Alamat lengkap<textarea required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Jalan, nomor rumah, patokan..." /></label>}</div><div className="order-review"><h3>Ringkasan</h3>{items.map((p) => <div className="review-line" key={p.id}><span>{p.qty}× {p.name}</span><b>{money(p.qty * p.price)}</b></div>)}<div className="review-fee"><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="review-fee"><span>Ongkir</span><b>{shipping ? money(shipping) : "Gratis"}</b></div><div className="review-total"><span>Total</span><b>{money(subtotal + shipping)}</b></div><button className="primary full" disabled={busy}>{busy ? "Memproses..." : "Buat pesanan"}<span>→</span></button><small>Dengan memesan, Anda menyetujui konfirmasi melalui WhatsApp.</small></div></div></form></section></div>;
+}
+
+function TrackView() {
+  const [orderNo, setOrderNo] = useState(""); const [phone, setPhone] = useState(""); const [order, setOrder] = useState<Order | null>(null); const [error, setError] = useState("");
+  const submit = async (e: FormEvent) => { e.preventDefault(); setError(""); try { const data = await callApi(`/api/app?view=track&orderNo=${encodeURIComponent(orderNo)}&phone=${encodeURIComponent(phone)}`); setOrder(data.order as unknown as Order); } catch (e) { setOrder(null); setError(e instanceof Error ? e.message : "Tidak ditemukan."); } };
+  const steps = ["new", "confirmed", "preparing", "ready", ...(order?.fulfillment === "delivery" ? ["delivering"] : []), "completed"];
+  return <main className="subpage"><section className="track-card"><div className="track-intro"><span className="kicker">LACAK PESANAN</span><h1>Sudah sampai mana?</h1><p>Masukkan nomor order dan minimal 6 digit terakhir nomor WhatsApp.</p><form onSubmit={(e) => void submit(e)}><label>Nomor pesanan<input required value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ORD-20260822-XXXXX" /></label><label>Nomor WhatsApp<input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx" /></label><button className="primary"><Icon name="search"/> Lacak sekarang</button>{error && <small className="form-error">{error}</small>}</form></div><div className="track-result">{order ? <><div className="track-order-head"><div><span>{order.order_no}</span><h3>{statusLabel[order.status]}</h3></div><b>{money(order.total)}</b></div>{order.status === "cancelled" ? <div className="track-placeholder"><Icon name="box" size={54}/><h3>Pesanan dibatalkan</h3><p>Stok sudah dikembalikan. Hubungi toko bila ada pertanyaan.</p></div> : <div className="timeline">{steps.map((s, index) => { const current = steps.indexOf(order.status); return <div key={s} className={index <= current ? "done" : ""}><span>{index < current ? "✓" : index + 1}</span><p><b>{statusLabel[s]}</b><small>{index === current ? "Status saat ini" : index < current ? "Sudah diproses" : "Menunggu"}</small></p></div>; })}</div>}<div className="track-items">{order.items.map((i) => <div key={i.id}><span>{i.qty}× {i.product_name}</span><b>{money(i.subtotal)}</b></div>)}</div></> : <div className="track-placeholder"><Icon name="truck" size={54}/><h3>Perjalanan pesanan tampil di sini</h3><p>Status diperbarui oleh admin dari pesanan masuk hingga selesai.</p></div>}</div></section></main>;
+}
+
+function MemberView({ data, user, busy, login, logout, shop }: { data: MemberData | null; user: User | null; busy: boolean; login: () => Promise<void>; logout: () => Promise<void>; shop: () => void }) {
+  if (!data) return <main className="auth-page"><section className="auth-card"><div className="auth-art"><div className="point-orbit"><span>+10</span><b>120</b><small>poin aktif</small></div><h2>Belanja rutin,<br/>dapat lebih.</h2><p>Member mendapatkan poin, riwayat transaksi, dan pesan ulang lebih cepat.</p></div><div className="auth-form"><span className="kicker">AKUN MEMBER</span><h1>Masuk sebagai pelanggan</h1><p>Versi lokal memakai simulasi Google. Tidak ada password member yang disimpan.</p>{user && user.role !== "member" && <div className="info-box">Anda sedang masuk sebagai {user.role}. Keluar dahulu untuk berganti peran.</div>}<button className="google-button" disabled={busy} onClick={() => void login()}><b>G</b> Lanjutkan dengan Google <span>Demo</span></button><div className="demo-credential"><b>Akun dummy member</b><span>member.demo@gmail.com</span><small>Nama: Nadia Pelanggan · Saldo awal: 120 poin</small></div>{user && <button className="text-button" onClick={() => void logout()}>Keluar dari sesi saat ini</button>}</div></section></main>;
+  return <main className="dashboard member-dashboard"><div className="dashboard-top"><div><span className="kicker">MEMBER AREA</span><h1>Halo, {data.user.name.split(" ")[0]}!</h1><p>Air cukup, poin pun ikut tumbuh.</p></div><button className="primary" onClick={shop}>Pesan lagi <span>→</span></button></div><div className="member-grid"><section className="points-card"><span>SEGAR REWARDS</span><b>{data.user.points}</b><small>poin tersedia</small><div><p>1 poin</p><span>=</span><p>Rp10.000</p></div></section><section className="member-summary"><div><Icon name="box"/><p><b>{data.orders.length}</b><span>Total pesanan</span></p></div><div><Icon name="check"/><p><b>{data.orders.filter((o) => o.status === "completed").length}</b><span>Pesanan selesai</span></p></div><div><Icon name="wallet"/><p><b>{data.orders.reduce((s, o) => s + o.points_earned, 0)}</b><span>Poin diperoleh</span></p></div></section></div><section className="panel"><div className="panel-heading"><div><span className="kicker">RIWAYAT</span><h2>Pesanan terakhir</h2></div></div>{data.orders.length ? <div className="order-list">{data.orders.map((o) => <article key={o.id}><div><span>{o.order_no}</span><small>{dateTime(o.created_at)}</small></div><p>{o.items.map((i) => `${i.qty}× ${i.product_name}`).join(", ")}</p><b>{money(o.total)}</b><span className={`status ${o.status}`}>{statusLabel[o.status]}</span></article>)}</div> : <div className="empty-panel"><Icon name="box" size={42}/><b>Belum ada pesanan member</b><p>Pesan dari akun ini untuk mulai mengumpulkan poin.</p></div>}</section></main>;
+}
+
+function AdminView({ data, user, busy, login, action, reload, print }: { data: AdminData | null; user: User | null; busy: boolean; login: (e: string, p: string) => Promise<void>; action: (p: Record<string, unknown>, after?: () => Promise<void>) => Promise<Record<string, unknown>>; reload: () => Promise<void>; print: (o: Order) => void }) {
+  const [email, setEmail] = useState("admin@segardepot.local"); const [password, setPassword] = useState("Admin123!"); const [tab, setTab] = useState<"overview"|"orders"|"stock"|"finance">("overview"); const [expense, setExpense] = useState({ category: "Transportasi", description: "", amount: "" }); const [stockTab, setStockTab] = useState<"stok" | "riwayat">("stok"); const [productModal, setProductModal] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
+  if (!data) return <main className="auth-page"><section className="auth-card admin-auth"><div className="auth-art"><span className="kicker light">RUANG KENDALI</span><h2>Satu layar.<br/>Semua terkendali.</h2><p>Pantau order, stok, pemasukan, dan operasional toko.</p><div className="admin-preview"><div><span></span><b>Order hari ini</b><strong>8</strong></div><div><span></span><b>Stok aman</b><strong>92%</strong></div></div></div><form className="auth-form" onSubmit={async (e) => { e.preventDefault(); try { await login(email, password); } catch {} }}><span className="kicker">ADMIN LOGIN</span><h1>Selamat datang kembali</h1><p>Masuk menggunakan akun operasional toko.</p><label>Email admin<input value={email} onChange={(e) => setEmail(e.target.value)} /></label><label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label><button className="primary full" disabled={busy}>{busy ? "Memeriksa..." : "Masuk ke dashboard"}<span>→</span></button><div className="demo-credential"><b>Akun dummy admin</b><span>admin@segardepot.local</span><small>Password: Admin123!</small></div>{user && user.role !== "admin" && <div className="info-box">Sesi {user.role} akan diganti saat login admin.</div>}</form></section></main>;
+  const nextFor = (o: Order) => o.status === "ready" ? { status: o.fulfillment === "delivery" ? "delivering" : "completed", label: o.fulfillment === "delivery" ? "Mulai antar" : "Selesaikan" } : statusNext[o.status];
+  const doAction = async (payload: Record<string, unknown>) => { try { await action(payload, reload); } catch {} };
+  return <main className="admin-layout"><aside className="admin-sidebar"><div><span className="brand-mark"><Icon name="drop" /></span><b>SEGAR.</b><small>Admin Console</small></div><nav><button className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}><Icon name="chart"/>Ringkasan</button><button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}><Icon name="box"/>Pesanan <span>{data.metrics.pending}</span></button><button className={tab === "stock" ? "active" : ""} onClick={() => setTab("stock")}><Icon name="menu"/>Persediaan</button><button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}><Icon name="wallet"/>Keuangan</button></nav><div className="admin-user"><span>{data.user.name.charAt(0)}</span><p><b>{data.user.name}</b><small>{data.user.email}</small></p></div></aside><section className="admin-content"><div className="admin-head"><div><span>{new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span><h1>{tab === "overview" ? "Ringkasan operasional" : tab === "orders" ? "Kelola pesanan" : tab === "stock" ? "Persediaan produk" : "Pemasukan & operasional"}</h1></div><span className="live-badge"><i></i>Data aktif</span></div>
+    {(tab === "overview" || tab === "finance") && <div className="metric-grid"><Metric label="Omzet selesai" value={money(data.metrics.revenue)} note={`${data.metrics.completed} transaksi lunas`} icon="chart"/><Metric label="Pesanan aktif" value={String(data.metrics.pending)} note="Butuh tindak lanjut" icon="box"/><Metric label="Biaya operasional" value={money(data.metrics.expenses)} note="Seluruh pencatatan" icon="wallet"/><Metric label="Estimasi netto" value={money(data.metrics.revenue - data.metrics.expenses)} note="Omzet dikurangi biaya" icon="check"/></div>}
+    {tab === "overview" && <div className="overview-grid"><section className="panel"><div className="panel-heading"><div><span className="kicker">ORDER QUEUE</span><h2>Perlu diproses</h2></div><button onClick={() => setTab("orders")}>Lihat semua →</button></div><OrderTable orders={data.orders.filter((o) => !["completed", "cancelled"].includes(o.status)).slice(0, 6)} nextFor={nextFor} doAction={doAction} print={print}/></section><section className="panel stock-watch"><div className="panel-heading"><div><span className="kicker">STOCK WATCH</span><h2>Stok produk</h2></div></div>{data.products.slice(0, 6).map((p) => { const available = p.stock - p.reserved; const pct = Math.min(100, available / Math.max(p.min_stock * 3, 1) * 100); return <div className="stock-mini" key={p.id}><div><span style={{ background: p.accent }}></span><p><b>{p.name}</b><small>{available} {p.unit} tersedia</small></p></div><div className="stock-bar"><i style={{ width: `${pct}%`, background: available <= p.min_stock ? "#e2574c" : p.accent }}></i></div></div>})}</section></div>}
+    {tab === "orders" && <section className="panel"><div className="panel-heading"><div><span className="kicker">SEMUA PESANAN</span><h2>{data.orders.length} transaksi tercatat</h2></div></div><OrderTable orders={data.orders} nextFor={nextFor} doAction={doAction} print={print}/></section>}
+    {tab === "stock" && <section className="panel"><div className="panel-heading"><div><span className="kicker">INVENTORY</span><h2>Kelola produk & stok</h2></div><div className="head-actions"><div className="sub-tabs"><button className={stockTab === "stok" ? "active" : ""} onClick={() => setStockTab("stok")}>Stok</button><button className={stockTab === "riwayat" ? "active" : ""} onClick={() => setStockTab("riwayat")}>Riwayat</button></div><button className="primary small" onClick={() => setProductModal({ open: true, product: null })}><Icon name="plus" size={15}/> Tambah produk</button></div></div>{stockTab === "riwayat" ? <div className="movement-list">{data.movements.length ? data.movements.map((m) => { const mp = data.products.find((p) => p.id === m.product_id); return <div key={m.id}><span className={`movement-badge ${m.movement_type}`}>{movementLabel[m.movement_type] ?? m.movement_type}</span><p><b>{m.reason}</b><small>{mp?.name ?? m.product_id} · {dateTime(m.created_at)}{m.reference_id ? ` · ${m.reference_id.slice(0, 18)}` : ""}</small></p><strong style={{ color: m.qty > 0 ? "var(--teal)" : "var(--danger)" }}>{m.qty > 0 ? `+${m.qty}` : m.qty}</strong></div>; }) : <div className="empty-panel">Belum ada pergerakan stok.</div>}</div> : <div className="inventory-table table-scroll"><table><thead><tr><th>Produk</th><th>SKU</th><th>Stok fisik</th><th>Dipesan</th><th>Tersedia</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{data.products.map((p) => { const available = p.stock - p.reserved; return <tr key={p.id}><td><div className="table-product"><span style={{ background: p.accent }}></span><b>{p.name}</b></div></td><td>{p.sku}</td><td>{p.stock} {p.unit}</td><td>{p.reserved}</td><td><b>{available}</b></td><td><span className={`status ${available <= p.min_stock ? "cancelled" : "completed"}`}>{available <= p.min_stock ? "Stok rendah" : "Aman"}</span></td><td><div className="row-actions"><div className="stock-actions"><button onClick={() => void doAction({ action: "adjust_stock", productId: p.id, delta: -1 })}>−</button><button onClick={() => void doAction({ action: "adjust_stock", productId: p.id, delta: 1 })}>+</button><button onClick={() => void doAction({ action: "adjust_stock", productId: p.id, delta: 10 })}>+10</button></div><button className="row-icon" title="Edit produk" onClick={() => setProductModal({ open: true, product: p })}><Icon name="edit" size={16}/></button><button className="row-icon danger" title="Hapus produk" onClick={() => { if (window.confirm(`Hapus produk "${p.name}"? Tindakan tidak bisa dibatalkan.`)) void doAction({ action: "delete_product", productId: p.id }); }}><Icon name="trash" size={16}/></button></div></td></tr>})}</tbody></table></div>}</section>}
+    {tab === "finance" && <div className="finance-grid"><section className="panel"><div className="panel-heading"><div><span className="kicker">BIAYA BARU</span><h2>Catat operasional</h2></div></div><form className="expense-form" onSubmit={async (e) => { e.preventDefault(); try { await action({ action: "add_expense", ...expense, amount: Number(expense.amount) }, reload); setExpense({ ...expense, description: "", amount: "" }); } catch {} }}><label>Kategori<select value={expense.category} onChange={(e) => setExpense({ ...expense, category: e.target.value })}><option>Transportasi</option><option>Pembelian stok</option><option>Listrik</option><option>Upah</option><option>Lainnya</option></select></label><label>Deskripsi<input required value={expense.description} onChange={(e) => setExpense({ ...expense, description: e.target.value })} placeholder="Contoh: Bensin pengantaran" /></label><label>Nominal<input required type="number" min="1" value={expense.amount} onChange={(e) => setExpense({ ...expense, amount: e.target.value })} placeholder="50000" /></label><button className="primary" disabled={busy}>Simpan biaya</button></form></section><section className="panel"><div className="panel-heading"><div><span className="kicker">HISTORI BIAYA</span><h2>Operasional terbaru</h2></div></div><div className="expense-list">{data.expenses.length ? data.expenses.map((e) => <div key={e.id}><span className="expense-icon"><Icon name="wallet"/></span><p><b>{e.description}</b><small>{e.category} · {dateTime(e.created_at)}</small></p><strong>-{money(e.amount)}</strong></div>) : <div className="empty-panel">Belum ada biaya tercatat.</div>}</div></section></div>}
+   </section>{productModal.open && <ProductModal product={productModal.product} busy={busy} onClose={() => setProductModal({ open: false, product: null })} onSave={async (payload) => { try { await action(productModal.product ? { action: "update_product", productId: productModal.product.id, ...payload } : { action: "create_product", ...payload }, reload); setProductModal({ open: false, product: null }); } catch {} }} />}</main>;
+}
+
+function Metric({ label, value, note, icon }: { label: string; value: string; note: string; icon: string }) { return <article className="metric"><div><span>{label}</span><b>{value}</b><small>{note}</small></div><i><Icon name={icon}/></i></article>; }
+
+function OrderTable({ orders, nextFor, doAction, print }: { orders: Order[]; nextFor: (o: Order) => { status: string; label: string } | undefined; doAction: (p: Record<string, unknown>) => Promise<void>; print: (o: Order) => void }) {
+  return <div className="table-scroll"><table className="order-table"><thead><tr><th>Pesanan</th><th>Pelanggan</th><th>Item</th><th>Total</th><th>Status</th><th>Pembayaran</th><th>Aksi</th></tr></thead><tbody>{orders.length ? orders.map((o) => { const next = nextFor(o); return <tr key={o.id}><td><b>{o.order_no}</b><small>{dateTime(o.created_at)}</small></td><td><b>{o.customer_name}</b><small>{o.fulfillment === "delivery" ? "Diantar" : "Ambil sendiri"}</small></td><td><span>{o.items.reduce((s, i) => s + i.qty, 0)} item</span><small>{o.items[0]?.product_name}</small></td><td><b>{money(o.total)}</b></td><td><span className={`status ${o.status}`}>{statusLabel[o.status]}</span></td><td><button className={`payment-chip ${o.payment_status}`} disabled={o.payment_status === "paid" || o.status === "cancelled"} onClick={() => void doAction({ action: "mark_paid", orderId: o.id })}>{statusLabel[o.payment_status]}</button><small>{paymentMethodLabel[o.payment_method] ?? o.payment_method}</small></td><td><div className="row-actions"><button title="Cetak" onClick={() => print(o)}><Icon name="print" size={17}/></button>{next && <button className="next-action" onClick={() => void doAction({ action: "update_order", orderId: o.id, status: next.status })}>{next.label}</button>}{!["completed", "cancelled"].includes(o.status) && <button className="danger-action" onClick={() => void doAction({ action: "update_order", orderId: o.id, status: "cancelled" })}>Batal</button>}</div></td></tr>}) : <tr><td colSpan={7}><div className="empty-panel">Belum ada pesanan.</div></td></tr>}</tbody></table></div>;
+}
+
+function ProductModal({ product, busy, onClose, onSave }: { product: Product | null; busy: boolean; onClose: () => void; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
+  const [form, setForm] = useState({
+    sku: product?.sku ?? "", name: product?.name ?? "", category: product?.category ?? "Air Galon",
+    unit: product?.unit ?? "galon", price: product ? String(product.price) : "",
+    stock: product ? String(product.stock) : "0", minStock: product ? String(product.min_stock) : "5",
+    accent: product?.accent ?? "#176B87",
+  });
+  const accents = ["#176B87", "#D44B52", "#2895A9", "#2482C5", "#4AA3D8", "#6CBCCF", "#91D5E4", "#0B7A75", "#7A5AC9", "#C98A2D"];
+  const submit = async (e: FormEvent) => { e.preventDefault(); await onSave({ ...form, price: Number(form.price), stock: Number(form.stock), minStock: Number(form.minStock) }); };
+  return <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={onClose}>×</button><div className="modal-head"><span className="kicker">{product ? "EDIT PRODUK" : "PRODUK BARU"}</span><h2>{product ? `Edit ${product.name}` : "Tambah produk"}</h2><p>{product ? "Ubah detail produk. Stok diubah lewat tombol penyesuaian." : "Stok awal tercatat sebagai penyesuaian di riwayat."}</p></div><form onSubmit={(e) => void submit(e)}><div className="product-form-grid"><label>SKU<input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="AQ-G19" maxLength={40} /></label><label>Nama produk<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Aqua Galon 19 L" /></label><label>Kategori<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}><option>Air Galon</option><option>Air Botol</option><option>Es Batu</option><option>Lainnya</option></select></label><label>Satuan<input required value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="galon" /></label><label>Harga (Rp)<input required type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="23000" /></label><label>Stok awal{product ? <input value={form.stock} disabled title="Gunakan tombol penyesuaian untuk mengubah stok" /> : <input required type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="0" />}</label><label>Min. stok (peringatan)<input required type="number" min="0" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} placeholder="5" /></label></div><div className="field-label" style={{ marginTop: 16 }}>Warna aksen</div><div className="accent-row">{accents.map((c) => <button key={c} type="button" className={form.accent === c ? "selected" : ""} style={{ background: c }} onClick={() => setForm({ ...form, accent: c })} aria-label={`Aksen ${c}`} />)}</div><div className="modal-actions"><button type="button" className="ghost" onClick={onClose}>Batal</button><button className="primary" disabled={busy}>{busy ? "Menyimpan..." : "Simpan produk"}</button></div></form></section></div>;
+}
+
+function Receipt({ order, close }: { order: Order; close: () => void }) { return <div className="modal-backdrop receipt-wrap"><section className="receipt-print"><div className="receipt-brand"><span className="brand-mark"><Icon name="drop"/></span><div><b>SEGAR.</b><small>Depot air & es</small></div></div><div className="receipt-meta"><p><span>Nomor</span><b>{order.order_no}</b></p><p><span>Tanggal</span><b>{dateTime(order.created_at)}</b></p><p><span>Pelanggan</span><b>{order.customer_name}</b></p><p><span>Layanan</span><b>{order.fulfillment === "delivery" ? "Diantar" : "Ambil sendiri"}</b></p><p><span>Pembayaran</span><b>{paymentMethodLabel[order.payment_method] ?? order.payment_method}</b></p></div><div className="receipt-items">{order.items.map((i) => <div key={i.id}><p><b>{i.product_name}</b><span>{i.qty} × {money(i.unit_price)}</span></p><strong>{money(i.subtotal)}</strong></div>)}</div><div className="receipt-total"><span>Total</span><b>{money(order.total)}</b></div><div className="receipt-status"><span>{statusLabel[order.payment_status]}</span><span>{statusLabel[order.status]}</span></div><p className="receipt-thanks">Terima kasih sudah belanja di SEGAR.<br/>Air jernih, urusan lebih ringan.</p></section><div className="receipt-controls"><button onClick={close}>Tutup</button><button className="primary" onClick={() => window.print()}><Icon name="print"/> Cetak nota</button></div></div>; }
