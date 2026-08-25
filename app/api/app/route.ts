@@ -455,6 +455,7 @@ export async function POST(request: Request) {
     if (!user || user.role !== "admin") return json({ error: "Akses admin diperlukan." }, { status: 401 });
 
     if (action === "update_order") return updateOrder(body);
+    if (action === "update_order_details") return updateOrderDetails(body);
     if (action === "create_product") return createProduct(body);
     if (action === "update_product") return updateProduct(body);
     if (action === "delete_product") return deleteProduct(body);
@@ -610,6 +611,7 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
   const fulfillment = body.fulfillment === "pickup" ? "pickup" : "delivery";
   const address = String(body.address ?? "").trim();
   const paymentMethod = normalizePaymentMethod(body.paymentMethod);
+  const orderType = body.order_type === "offline" ? "offline" : "regular"; // online (default) | offline (kasir admin) | redeem (di handle redeem_reward)
   const inputItems = Array.isArray(body.items) ? body.items as Array<{ productId?: string; qty?: number }> : [];
   if (customerName.length < 2 || phone.replace(/\D/g, "").length < 9) return json({ error: "Nama dan nomor WhatsApp wajib valid." }, { status: 422 });
   if (fulfillment === "delivery" && address.length < 8) return json({ error: "Alamat pengiriman belum lengkap." }, { status: 422 });
@@ -631,9 +633,9 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
   const user = await currentUser(request);
   const orderId = randomId("ord"); const orderNo = await nextOrderNo(); const now = new Date().toISOString();
   const statements = [db().prepare(
-    `INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'unpaid', ?, ?, 0, ?)`
-  ).bind(orderId, orderNo, user?.role === "member" ? user.id : null, customerName, phone, address, fulfillment, paymentMethod, total, now)];
+    `INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, order_type, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'unpaid', ?, ?, 0, ?, ?)`
+  ).bind(orderId, orderNo, user?.role === "member" ? user.id : null, customerName, phone, address, fulfillment, paymentMethod, total, orderType, now)];
   for (const { product, qty } of selected) {
     statements.push(
       db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -765,6 +767,72 @@ async function updateOrder(body: Record<string, unknown>) {
   }
   await db().batch(statements); await grantPointsIfEligible(order.id);
   return json({ ok: true });
+}
+
+/* Edit detail pesanan (opsional, untuk koreksi kesalahan order).
+   Hanya order reguler yang belum selesai/dibatalkan. Redeem tidak bisa diedit.
+   Item lama dibandingkan dengan baru → reserved stok disesuaikan per produk. */
+async function updateOrderDetails(body: Record<string, unknown>) {
+  const orderId = String(body.orderId ?? "");
+  const order = await db().prepare("SELECT * FROM orders WHERE id = ?").bind(orderId).first<OrderRow>();
+  if (!order) return json({ error: "Order tidak ditemukan." }, { status: 404 });
+  if (order.order_type === "redeem") return json({ error: "Order tukar poin tidak bisa diedit." }, { status: 409 });
+  if (["completed", "cancelled"].includes(order.status)) return json({ error: "Order selesai/dibatalkan tidak bisa diedit." }, { status: 409 });
+  const customerName = String(body.customerName ?? "").trim();
+  const phone = String(body.phone ?? "").trim();
+  const fulfillment = body.fulfillment === "pickup" ? "pickup" : "delivery";
+  const address = String(body.address ?? "").trim();
+  const paymentMethod = normalizePaymentMethod(body.paymentMethod);
+  if (customerName.length < 2 || phone.replace(/\D/g, "").length < 9) return json({ error: "Nama dan nomor WhatsApp wajib valid." }, { status: 422 });
+  if (fulfillment === "delivery" && address.length < 8) return json({ error: "Alamat pengiriman belum lengkap." }, { status: 422 });
+  const inputItems = Array.isArray(body.items) ? body.items as Array<{ productId?: string; qty?: number }> : [];
+  if (!inputItems.length) return json({ error: "Pesanan minimal berisi satu item." }, { status: 422 });
+
+  // Validasi item + hitung subtotal
+  const selected: Array<{ product: ProductRow; qty: number }> = [];
+  let subtotal = 0;
+  for (const item of inputItems) {
+    const qty = parseQty(item.qty);
+    if (qty === null || qty < 1) return json({ error: "Jumlah produk tidak valid." }, { status: 422 });
+    const product = await db().prepare("SELECT * FROM products WHERE id = ?").bind(item.productId).first<ProductRow>();
+    if (!product) return json({ error: "Salah satu produk tidak tersedia." }, { status: 422 });
+    selected.push({ product, qty }); subtotal += product.price * qty;
+  }
+
+  // Item lama → delta reserved
+  const oldItems = await db().prepare("SELECT product_id, qty FROM order_items WHERE order_id = ?").bind(orderId).all<{ product_id: string; qty: number }>();
+  const oldMap = new Map(oldItems.results.map((i) => [i.product_id, i.qty]));
+  const newMap = new Map(selected.map(({ product, qty }) => [product.id, qty]));
+  for (const { product, qty } of selected) {
+    const old = oldMap.get(product.id) ?? 0;
+    const delta = qty - old;
+    if (delta > 0 && product.stock - product.reserved < delta) return json({ error: `Stok ${product.name} tidak mencukupi untuk perubahan ini.` }, { status: 409 });
+  }
+
+  const settings = await getSettings();
+  const shipping = fulfillment === "delivery" ? settings.deliveryFee : 0;
+  const total = subtotal + shipping;
+  const statements = [
+    db().prepare("UPDATE orders SET customer_name = ?, phone = ?, address = ?, fulfillment = ?, payment_method = ?, total = ? WHERE id = ?")
+      .bind(customerName, phone, address, fulfillment, paymentMethod, total, orderId),
+    db().prepare("DELETE FROM order_items WHERE order_id = ?").bind(orderId),
+  ];
+  for (const { product, qty } of selected) {
+    statements.push(
+      db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(orderId, product.id, product.name, product.unit, qty, product.price, product.price * qty),
+    );
+  }
+  // Sesuaikan reserved: delta positif → tambah; negatif → kurangi
+  for (const { product, qty } of selected) {
+    const delta = qty - (oldMap.get(product.id) ?? 0);
+    if (delta !== 0) statements.push(db().prepare("UPDATE products SET reserved = MAX(0, reserved + ?) WHERE id = ?").bind(delta, product.id));
+  }
+  for (const [pid, oldQty] of oldMap) {
+    if (!newMap.has(pid)) statements.push(db().prepare("UPDATE products SET reserved = MAX(0, reserved - ?) WHERE id = ?").bind(oldQty, pid));
+  }
+  await db().batch(statements);
+  return json({ ok: true, total });
 }
 
 async function createSession(request: Request, userId: string) {

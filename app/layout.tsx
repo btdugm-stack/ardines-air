@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorkerRegister from "./sw-register";
+import InstallPrompt from "./install-prompt";
 
 export const metadata: Metadata = {
   title: "Depot Air Mineral UMKM",
@@ -39,6 +40,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ServiceWorkerRegister />
+        <InstallPrompt />
         {children}
       </body>
     </html>

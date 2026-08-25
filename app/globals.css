@@ -2746,7 +2746,7 @@ textarea {
   margin-bottom: 12px;
 }
 
-.stock-mini > div:first-child > span,
+.stock-mini > div:first-child > span:not(.status),
 .table-product span {
   width: 8px;
   height: 36px;
@@ -4652,4 +4652,414 @@ a:focus-visible {
 
 .offline-summary {
   margin-top: auto;
+}
+
+/* ============================================================
+   RECEIPT — alamat pengiriman (khusus layanan Diantar)
+   Alamat panjang di-wrap rapi, label di atas, konten di bawah.
+   ============================================================ */
+.receipt-meta p.receipt-address {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px;
+  margin: 12px -10px 0;
+  background: #f2f8f7;
+  border: 1px solid #dcebe9;
+  border-radius: 8px;
+}
+
+.receipt-meta p.receipt-address span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.receipt-meta p.receipt-address b {
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ============================================================
+   TAG JENIS ORDER — Online / Offline / Redeem (tab Pesanan)
+   Gaya konsisten dengan .redeem-tag (pill kecil, huruf tebal)
+   ============================================================ */
+.online-tag,
+.offline-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
+.online-tag {
+  background: #e6f4f2;
+  color: #0b7a75;
+  border: 1px solid #bfe3df;
+}
+
+.offline-tag {
+  background: #eef0f7;
+  color: #3b4a7a;
+  border: 1px solid #d5dae8;
+}
+
+.order-list article .online-tag,
+.order-list article .offline-tag {
+  margin-left: 0;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   INSTALL PROMPT — pop-up pasang aplikasi (PWA)
+   Bottom sheet, tampil otomatis, non-intrusif
+   ============================================================ */
+.install-prompt {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  animation: installSlideUp 0.3s ease;
+}
+
+@keyframes installSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.install-card {
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 40px rgba(12, 44, 54, 0.18);
+}
+
+.install-icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--aqua);
+  color: var(--teal-dark);
+}
+
+.install-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-text b {
+  display: block;
+  font-size: 14px;
+  color: var(--navy);
+}
+
+.install-text small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.install-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.install-actions .primary.small {
+  min-height: 40px;
+  padding: 0 18px;
+}
+
+.install-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.install-close:hover {
+  background: var(--paper);
+}
+
+@media (min-width: 721px) {
+  .install-prompt {
+    bottom: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .install-actions .primary.small {
+    padding: 0 14px;
+    font-size: 13px;
+  }
+}
+
+/* ============================================================
+   AUDIT RESPONSIF (2026-08-25) — overflow & touch lintas device
+   1) Grid admin boleh menyusut (min-width:0) → order-table yang
+      melebar (tag ONLINE/OFFLINE) tidak lagi mendorong panel
+      keluar viewport; .table-scroll yang scroll.
+   2) Tablet 721–1024: metric 2 kolom, overview/finance 1 kolom,
+      sidebar lebih ramping → tidak overflow.
+   3) Touch target ≥44px untuk semua ≤1024px (mobile + tablet);
+      desktop (mouse) 40px untuk tombol aksi tabel.
+   ============================================================ */
+
+/* 1) Grid & panel bisa menyusut */
+.overview-grid > *,
+.finance-grid > *,
+.metric-grid {
+  min-width: 0;
+}
+
+.admin-content .panel {
+  min-width: 0;
+}
+
+.table-scroll {
+  max-width: 100%;
+}
+
+/* Tombol aksi tabel — baseline 40px (desktop mouse) */
+.payment-chip,
+.next-action,
+.danger-action,
+.row-actions button {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.sub-tabs button {
+  min-height: 40px;
+}
+
+/* 2) Tablet 721–1024: layout admin adaptif */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .admin-layout {
+    grid-template-columns: 200px 1fr;
+  }
+
+  .admin-content {
+    padding: 20px;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3) Touch target ≥44px di semua ≤1024px (mobile + tablet) */
+@media (max-width: 1024px) {
+  .payment-chip,
+  .next-action,
+  .danger-action,
+  .row-actions button,
+  .sub-tabs button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .panel-heading button {
+    min-height: 44px;
+  }
+
+  .offline-list .add-button {
+    min-height: 44px;
+  }
+
+  .choice-row button {
+    min-height: 44px;
+  }
+}
+
+/* AUDIT RESPONSIF — penyempurnaan touch target (pass 2) */
+.offline-list .add-button {
+  min-height: 44px;
+}
+
+.modal-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.panel-heading button {
+  min-height: 40px;
+}
+
+@media (max-width: 1024px) {
+  .offline-form .choice-row button {
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   PAGINATION — navigasi halaman list admin
+   ============================================================ */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.pagination small {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pagination-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btns button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: white;
+  color: var(--navy);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pagination-btns button:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+  background: var(--aqua);
+}
+
+.pagination-btns button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination-btns span {
+  min-width: 56px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+@media (max-width: 1024px) {
+  .pagination-btns button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   STOCK WATCH — status stok sinkron dengan Persediaan
+   ============================================================ */
+.stock-mini .status {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.stock-mini .status.completed {
+  background: #e6f4f2;
+  color: var(--teal-dark);
+  border-radius: 999px;
+}
+
+.stock-mini .status.cancelled {
+  background: #fdeceb;
+  color: var(--danger);
+  border-radius: 999px;
+}
+
+/* ============================================================
+   FIX OVERFLOW METRIC (tablet) — kartu metric bisa menyusut
+   ============================================================ */
+.metric {
+  min-width: 0;
+}
+
+.metric b {
+  word-break: break-word;
+}
+
+/* ============================================================
+   PAID CHECK — checkbox "Sudah dibayar" compact (order offline)
+   ============================================================ */
+.paid-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.paid-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.paid-check b {
+  font-size: 13px;
+  color: var(--navy);
+  line-height: 1.3;
+}
+
+.paid-check small {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.paid-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--teal);
+  cursor: pointer;
+  flex-shrink: 0;
 }
