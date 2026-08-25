@@ -131,6 +131,7 @@ select:focus-visible {
   background: none;
   color: var(--ink);
   text-align: left;
+  min-height: 44px;
   transition: opacity var(--transition-base);
 }
 
@@ -699,7 +700,7 @@ select:focus-visible {
   outline: 0;
   background: none;
   width: 100%;
-  font-size: var(--font-base);
+  font-size: 16px; /* ≥16px mencegah auto-zoom iOS saat fokus */
   color: var(--ink);
 }
 
@@ -891,13 +892,13 @@ select:focus-visible {
   background: var(--aqua);
   color: var(--teal-dark);
   font-weight: 800;
-  font-size: 11px;
-  padding: 10px 14px;
+  font-size: 12px;
+  padding: 14px 16px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .add-button:hover {
@@ -1198,7 +1199,7 @@ select {
   padding: 14px 16px;
   outline: none;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 16px; /* ≥16px mencegah auto-zoom iOS saat fokus */
   transition: all var(--transition-base);
   min-height: 48px;
 }
@@ -3450,4 +3451,1205 @@ footer b {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ============================================================
+   FIX MOBILE: media query ini harus SETELAH definisi base
+   (base .track-card/.auth-card/.member-grid ada di baris ~1640-2210,
+   setelah media query 720px lama di baris 1429 — sehingga menimpanya).
+   ============================================================ */
+@media (max-width: 720px) {
+  .track-card,
+  .auth-card,
+  .member-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .track-intro,
+  .track-result,
+  .auth-form,
+  .auth-art {
+    padding: 32px 24px;
+  }
+
+  .auth-art {
+    min-height: 200px;
+  }
+
+  .track-intro h1 {
+    font-size: 34px;
+  }
+
+  .auth-form h1 {
+    font-size: 28px;
+  }
+
+  .member-grid {
+    margin: 24px 0;
+  }
+}
+
+/* ============================================================
+   FIX MOBILE ADMIN: base .admin-layout/.admin-sidebar/.
+   dashboard/.metric-grid/.order-list article berada SETELAH
+   media query 720px lama (baris ~1539) sehingga menimpanya.
+   Blok ini (paling akhir) memastikan dashboard admin mobile
+   layout 1 kolom + sidebar jadi bar navigasi sticky.
+   ============================================================ */
+@media (max-width: 720px) {
+  .dashboard {
+    padding: 48px 16px 80px;
+  }
+
+  .dashboard-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .dashboard-top h1 {
+    font-size: 32px;
+  }
+
+  .admin-layout {
+    display: block;
+  }
+
+  .admin-sidebar {
+    min-height: auto;
+    position: sticky;
+    top: 64px;
+    z-index: 20;
+    padding: 10px 16px;
+    flex-direction: row;
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-sidebar > div:first-child,
+  .admin-user {
+    display: none;
+  }
+
+  .admin-sidebar nav {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    flex-direction: row;
+  }
+
+  .admin-sidebar nav button {
+    justify-content: center;
+    padding: 12px;
+    font-size: 10px;
+  }
+
+  .admin-sidebar nav button > span {
+    margin-left: 0;
+  }
+
+  .admin-content {
+    padding: 28px 16px 80px;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .order-list article {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .global-notice {
+    right: 16px;
+    left: 16px;
+    max-width: none;
+    top: 76px;
+  }
+}
+
+@media (max-width: 440px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   FIX MOBILE ADMIN GRID: base .overview-grid (1.7fr 0.8fr,
+   .member-summary, .finance-grid) berada SETELAH media query
+   lama (~baris 1395) sehingga menimpanya. Juga min-width:0
+   agar grid item bisa menyusut (tabel tidak memaksa panel
+   melebar → tidak ada horizontal scroll).
+   ============================================================ */
+@media (max-width: 720px) {
+  .overview-grid,
+  .member-summary,
+  .finance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-grid > *,
+  .member-summary > *,
+  .finance-grid > * {
+    min-width: 0;
+  }
+
+  .panel {
+    min-width: 0;
+  }
+
+  .table-scroll {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+}
+
+/* ============================================================
+   FIX MOBILE ADMIN NAV: tombol sidebar (base padding 14/16px,
+   font 13px, white-space nowrap dari table dll) membuat grid
+   repeat(4,1fr) melampaui 390px. Persempit di mobile.
+   ============================================================ */
+@media (max-width: 720px) {
+  .admin-sidebar nav button {
+    min-width: 0;
+    padding: 10px 8px;
+    font-size: 11px;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .admin-sidebar nav button svg {
+    flex-shrink: 0;
+  }
+}
+
+/* ============================================================
+   FIX MOBILE TOUCH TARGET: stepper/stock-actions (32px) dan
+   modal-close (40px) di bawah standar 44px. Perbesar di mobile.
+   ============================================================ */
+@media (max-width: 720px) {
+  .stepper button,
+  .stock-actions button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .modal-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ============================================================
+   FIX MOBILE TOUCH (tabel admin): payment-chip (31px) dan
+   tombol aksi baris (32-36px) di bawah 44px.
+   ============================================================ */
+@media (max-width: 720px) {
+  .payment-chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .row-actions button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .row-icon {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .next-action,
+  .danger-action {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+}
+
+/* FIX MOBILE: .panel-heading button ("Lihat semua") min 44px */
+@media (max-width: 720px) {
+  .panel-heading button {
+    min-height: 44px;
+    padding: 10px 0;
+  }
+}
+
+/* ============================================================
+   FLOATING CART (mobile): FAB keranjang di kanan-bawah, di atas
+   mobile-nav. Hanya tampil ≤1100px (saat mobile-nav aktif).
+   Sembunyi di desktop — header cart-button sudah cukup.
+   ============================================================ */
+.floating-cart {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .floating-cart {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: fixed;
+    right: 16px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    z-index: 60;
+    border: 0;
+    background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    color: white;
+    padding: 12px 18px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(8, 127, 120, 0.35);
+    font-weight: 800;
+    font-size: 14px;
+    min-height: 52px;
+    animation: floatIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .floating-cart svg {
+    flex-shrink: 0;
+  }
+
+  .floating-cart b {
+    display: grid;
+    place-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--lime);
+    color: var(--navy);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .floating-cart span {
+    font-size: 13px;
+    font-weight: 700;
+    opacity: 0.95;
+  }
+
+  @keyframes floatIn {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+/* ============================================================
+   TOMBOL DOWNLOAD CSV (menu admin) — outline teal, ≥44px.
+   ============================================================ */
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--teal);
+  background: white;
+  color: var(--teal-dark);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  min-height: 44px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.download-btn:hover {
+  background: var(--aqua);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 720px) {
+  .download-btn {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+/* ============================================================
+   RAPIKAN TOMBOL AKSI — tab Persediaan (admin)
+   1) head-actions: tinggi tombol seragam + wrap rapi di mobile.
+   2) row actions: grup stok (./+) jadi pill terpisah dari
+      edit/hapus; gap lebih lega.
+   ============================================================ */
+.primary.small {
+  min-height: 44px;
+}
+
+.row-actions {
+  gap: 8px;
+}
+
+.stock-actions {
+  background: var(--aqua);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.stock-actions button {
+  border: 0;
+  background: transparent;
+  height: 30px;
+  min-width: 34px;
+  padding: 0 6px;
+}
+
+.stock-actions button:hover {
+  background: rgba(8, 127, 120, 0.14);
+}
+
+.row-actions > .stock-actions + .row-icon {
+  margin-left: 2px;
+}
+
+@media (max-width: 720px) {
+  .panel-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .head-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stock-actions {
+    background: var(--aqua);
+  }
+
+  .stock-actions button {
+    height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ============================================================
+   GAMBAR PRODUK — upload & preview di ProductModal, tampil di
+   product-art (kartu katalog).
+   ============================================================ */
+.product-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.product-art img + small {
+  z-index: 2;
+}
+
+.product-art img + small,
+.product-art img ~ i {
+  text-shadow: 0 1px 6px rgba(255, 255, 255, 0.85);
+}
+
+.image-uploader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.image-drop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px dashed var(--teal);
+  background: var(--aqua);
+  color: var(--teal-dark);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  min-height: 44px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.image-drop:hover {
+  background: color-mix(in srgb, var(--aqua) 70%, white);
+}
+
+.image-drop input[type="file"] {
+  display: none;
+}
+
+.image-preview {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.image-preview .row-icon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* ============================================================
+   REWARDS MEMBER — katalog tukar poin (member) & kelola (admin)
+   ============================================================ */
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.reward-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.reward-card > div b {
+  font-size: 16px;
+  color: var(--navy);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.reward-card > div small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reward-card > strong {
+  font-size: 22px;
+  color: var(--teal-dark);
+  font-weight: 800;
+}
+
+.reward-card > strong span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.reward-card .primary {
+  width: 100%;
+  min-height: 44px;
+}
+
+.reward-card .disabled-btn {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reward-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.reward-list > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.reward-list > div:last-child {
+  border-bottom: 0;
+}
+
+.reward-list > div > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.reward-list > div b {
+  display: block;
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.reward-list > div small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reward-list > div > strong {
+  color: var(--teal-dark);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .reward-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   ARUS KAS (tab Keuangan admin) — ringkasan uang masuk/keluar
+   ============================================================ */
+.cashflow-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.cashflow-summary > div {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cashflow-summary span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.cashflow-summary b {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.cashflow-summary small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cashflow-summary .positive b {
+  color: var(--teal-dark);
+}
+
+.cashflow-summary .negative {
+  background: #fdf3f2;
+  border-color: #f2d5d2;
+}
+
+.cashflow-summary .negative b {
+  color: var(--danger);
+}
+
+@media (max-width: 720px) {
+  .cashflow-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   TAG REDEEM — pesanan hasil tukar poin (tab Pesanan admin)
+   ============================================================ */
+.redeem-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #b45309, #d97706);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
+.redeem-free {
+  color: var(--teal-dark);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.order-list article .redeem-tag {
+  margin-left: 0;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   AUDIT UI — FIX KONSISTENSI & OVERFLOW (pass 2026-08-25)
+   1) finance-grid (tab Keuangan): item harus bisa menyusut —
+      .order-list article (min 480px) memaksa panel melebar
+      → overflow 1464px di desktop. Fix: min-width:0 + kolom
+      fleksibel + ellipsis.
+   2) footer: grid 3 kolom (1fr auto auto, gap 64px) overflow
+      di ≤360px → 1 kolom di mobile.
+   3) tombol aksi tabel admin desktop: samakan tinggi minimum
+      (stepper 30px & row-icon 32px → 40px) konsisten dengan
+      standar 44px mobile.
+   4) section-heading: proteksi wrap agar search-box tidak
+      pernah menabrak judul di lebar menengah.
+   ============================================================ */
+
+/* 1) finance-grid menyusut */
+.finance-grid > * {
+  min-width: 0;
+}
+
+.finance-grid .order-list article {
+  grid-template-columns: minmax(150px, 1.2fr) minmax(0, 2fr) auto auto;
+  gap: 12px;
+}
+
+.finance-grid .order-list article > div:first-child {
+  min-width: 0;
+}
+
+.finance-grid .order-list article > div span,
+.finance-grid .order-list article > div small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 720px) {
+  .finance-grid .order-list article {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* 2) footer mobile 1 kolom */
+@media (max-width: 360px) {
+  footer {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 40px 24px;
+    margin-top: 64px;
+  }
+}
+
+/* 3) tombol aksi tabel admin — tinggi konsisten desktop */
+.row-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.stock-actions button {
+  height: 38px;
+  min-width: 40px;
+}
+
+/* 4) section-heading proteksi wrap */
+.section-heading {
+  flex-wrap: wrap;
+}
+
+.search-box {
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   AUDIT UI — STATE TOMBOL KONSISTEN
+   Semua tombol kini punya feedback :active (tekan) yang jelas,
+   berbeda dari :hover (angkat). Kontras terjaga & animasi
+   konsisten di semua tab/viewport.
+   ============================================================ */
+
+/* Tombol primer: tekan = bg lebih gelap + turun (scale 0.97) */
+.primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  background: #05645f;
+  box-shadow: 0 2px 8px rgba(8, 127, 120, 0.35);
+}
+
+/* Tombol outline/ghost/sekunder: tekan = border teal + bg aqua lembut */
+.ghost:active:not(:disabled),
+.download-btn:active:not(:disabled),
+.image-drop:active:not(:disabled),
+.text-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  background: var(--aqua);
+}
+
+/* Tombol navigasi (header, nav, kategori, tab, choice-row): tekan = gelap */
+button:active:not(:disabled) {
+  transition-duration: 0.08s;
+}
+
+.category-row button:active:not(.active),
+.choice-row button:active:not(.selected),
+.sub-tabs button:active:not(.active),
+.admin-sidebar nav button:active:not(.active),
+.mobile-nav button:active:not(.active),
+.desktop-nav button:active:not(.active) {
+  transform: translateY(1px) scale(0.97);
+  background: rgba(8, 127, 120, 0.12);
+}
+
+/* Tombol aksi baris (tabel): tekan = bg aqua */
+.next-action:active:not(:disabled),
+.danger-action:active:not(:disabled),
+.row-icon:active:not(:disabled),
+.stock-actions button:active:not(:disabled) {
+  transform: scale(0.92);
+  background: rgba(8, 127, 120, 0.18);
+}
+
+/* Stepper +/- di kartu produk: tekan = aqua */
+.stepper button:active:not(:disabled) {
+  background: var(--aqua);
+  transform: scale(0.9);
+}
+
+/* Focus ring konsisten untuk aksesibilitas keyboard */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* Search-box: cukup 1 efek fokus (border + ring dari :focus-within).
+   Nonaktifkan outline input agar tidak ada 2 animasi saat klik. */
+.search-box input:focus-visible {
+  outline: none;
+}
+
+/* ============================================================
+   NOTIFIKASI — pembeda sukses/error (konsisten, kontras jelas)
+   ============================================================ */
+.global-notice.success {
+  background: var(--teal-dark);
+  border-left: 5px solid var(--lime);
+}
+
+.global-notice.error {
+  background: #b3402f;
+  border-left: 5px solid #ffd9d2;
+}
+
+.global-notice.success::before {
+  content: "✓";
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.global-notice.error::before {
+  content: "!";
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .global-notice {
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    padding: 14px 14px;
+  }
+
+  .global-notice button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ============================================================
+   FIX SIMETRI SEARCH-BOX + IKON NAV
+   Ikon search di-render collapse (height 0) di flex container —
+   solusi: posisikan absolute kiri-tengah, input diberi padding
+   kiri. Ikon nav dipaksa dimensi eksplisit.
+   ============================================================ */
+.search-box {
+  position: relative;
+}
+
+.search-box svg {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+  pointer-events: none;
+  flex: none;
+}
+
+.search-box input {
+  padding-left: 46px; /* 18px (padding kiri) + 20px (ikon) + 8px (jarak) */
+}
+
+.desktop-nav button svg,
+.mobile-nav button svg,
+.admin-sidebar nav button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.floating-cart svg,
+.cart-button svg,
+.brand-mark svg {
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   TOGGLE ROW — switch aktif/nonaktif notifikasi WhatsApp
+   ============================================================ */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: white;
+  cursor: pointer;
+}
+
+.toggle-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-row b {
+  font-size: 14px;
+  color: var(--navy);
+}
+
+.toggle-row small {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.toggle-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+  background: var(--teal);
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  transform: translateX(20px);
+}
+
+/* ============================================================
+   ORDER OFFLINE — modal transaksi langsung di toko (admin)
+   ============================================================ */
+.offline-modal {
+  max-width: 880px;
+  width: calc(100% - 32px);
+}
+
+.offline-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+  margin-top: 8px;
+}
+
+.offline-products {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: white;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.offline-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--muted);
+  background: var(--paper);
+}
+
+.offline-search svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.offline-search input {
+  border: 0;
+  outline: 0;
+  background: none;
+  width: 100%;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.offline-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.offline-list > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.offline-list > div:last-child {
+  border-bottom: 0;
+}
+
+.offline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.offline-list > div > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.offline-list b {
+  display: block;
+  font-size: 13.5px;
+  color: var(--navy);
+}
+
+.offline-list small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.offline-list .add-button {
+  padding: 8px 12px;
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.offline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.offline-form .form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.offline-form .toggle-row {
+  margin-top: 2px;
+}
+
+.offline-summary {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.offline-summary .review-total {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .offline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .offline-list {
+    max-height: 220px;
+  }
+}
+
+/* ============================================================
+   ORDER OFFLINE — EVALUASI TAMPILAN (hemat tempat & nyaman)
+   1) .offline-search & .toggle-row: label global flex-direction
+      column menimpa → ikon di atas input / toggle bertumpuk
+      (101px & 135px). Paksa row.
+   2) Modal lebih lebar + produk dominan (POS-style).
+   3) Form dipadatkan: gap kecil, choice-row ramping.
+   4) Total besar & mencolok untuk transaksi.
+   ============================================================ */
+.offline-modal {
+  max-width: 960px;
+}
+
+.offline-grid {
+  grid-template-columns: 1.4fr 1fr;
+  gap: 20px;
+}
+
+.offline-search {
+  flex-direction: row;
+  align-items: center;
+  padding: 9px 12px;
+}
+
+.offline-search input {
+  font-size: 15px;
+  padding: 0;
+}
+
+.toggle-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.offline-form .form-stack {
+  gap: 10px;
+}
+
+.offline-form .choice-row {
+  display: flex;
+  gap: 8px;
+}
+
+.offline-form .choice-row button {
+  flex: 1;
+  min-height: 42px;
+  padding: 8px 6px;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.offline-list {
+  max-height: 400px;
+}
+
+.offline-list > div {
+  padding: 11px 6px;
+}
+
+.offline-summary {
+  padding: 12px 14px;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.offline-summary .review-total b {
+  font-size: 22px;
+}
+
+.offline-summary .review-fee b {
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .offline-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .offline-list {
+    max-height: 260px;
+  }
+
+  .offline-form .choice-row button {
+    font-size: 11.5px;
+    padding: 8px 4px;
+  }
+}
+
+/* ORDER OFFLINE — pemadatan lanjutan */
+.offline-search input {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+.offline-form .toggle-row {
+  padding: 10px 12px;
+}
+
+.offline-form .form-stack label {
+  gap: 4px;
+}
+
+.offline-summary {
+  margin-top: auto;
 }

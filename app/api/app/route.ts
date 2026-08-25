@@ -1,17 +1,28 @@
 import { env } from "cloudflare:workers";
 import {
-  allowedTransitions, normalizePaymentMethod, parseAmount, parseQty, pointsFor, shippingFor,
+  allowedTransitions, normalizePaymentMethod, parseAmount, parseQty, pointsFor,
 } from "../../../lib/business";
 
 type ProductRow = {
   id: string; sku: string; name: string; category: string; unit: string;
-  price: number; stock: number; reserved: number; min_stock: number; accent: string;
+  price: number; stock: number; reserved: number; min_stock: number; accent: string; image: string | null;
 };
 
 type OrderRow = {
   id: string; order_no: string; user_id: string | null; customer_name: string;
   phone: string; address: string; fulfillment: string; status: string;
-  payment_status: string; payment_method: string; total: number; points_earned: number; created_at: string;
+  payment_status: string; payment_method: string; total: number; points_earned: number;
+  order_type: string; created_at: string;
+};
+
+type RewardRow = {
+  id: string; name: string; description: string; points_cost: number;
+  stock: number | null; active: number; product_id: string | null; created_at: string;
+};
+
+type RedemptionRow = {
+  id: string; user_id: string; reward_id: string; reward_name: string;
+  points_cost: number; status: string; created_at: string;
 };
 
 const SESSION_COOKIE = "depot_session";
@@ -30,7 +41,8 @@ const schemaStatements = [
     id TEXT PRIMARY KEY, sku TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     category TEXT NOT NULL, unit TEXT NOT NULL, price INTEGER NOT NULL,
     stock INTEGER NOT NULL, reserved INTEGER NOT NULL DEFAULT 0,
-    min_stock INTEGER NOT NULL DEFAULT 5, accent TEXT NOT NULL DEFAULT '#0B7A75'
+    min_stock INTEGER NOT NULL DEFAULT 5, accent TEXT NOT NULL DEFAULT '#0B7A75',
+    image TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY, order_no TEXT NOT NULL UNIQUE, user_id TEXT,
@@ -38,7 +50,7 @@ const schemaStatements = [
     fulfillment TEXT NOT NULL, status TEXT NOT NULL, payment_status TEXT NOT NULL,
     payment_method TEXT NOT NULL DEFAULT 'cod',
     total INTEGER NOT NULL, points_earned INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    order_type TEXT NOT NULL DEFAULT 'regular', created_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS order_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT NOT NULL, product_id TEXT NOT NULL,
@@ -59,9 +71,23 @@ const schemaStatements = [
     movement_type TEXT NOT NULL, order_id TEXT, created_at TEXT NOT NULL,
     UNIQUE(order_id, movement_type)
   )`,
+  `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY, value TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS rewards (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+    points_cost INTEGER NOT NULL, stock INTEGER, active INTEGER NOT NULL DEFAULT 1,
+    product_id TEXT, created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS redemptions (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reward_id TEXT NOT NULL,
+    reward_name TEXT NOT NULL, points_cost INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
   `CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_redemptions_user ON redemptions(user_id)`,
 ];
 
 const seedProducts = [
@@ -88,6 +114,10 @@ async function ensureReady() {
   if (!cols.results.some((c) => c.name === "payment_method")) {
     await db().prepare("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cod'").run();
   }
+  const pcols = await db().prepare("PRAGMA table_info(products)").all<{ name: string }>();
+  if (!pcols.results.some((c) => c.name === "image")) {
+    await db().prepare("ALTER TABLE products ADD COLUMN image TEXT").run();
+  }
   const count = await db().prepare("SELECT COUNT(*) AS total FROM products").first<{ total: number }>();
   if (!count?.total) {
     await db().batch(seedProducts.map((p) => db().prepare(
@@ -100,11 +130,101 @@ async function ensureReady() {
     db().prepare("INSERT OR IGNORE INTO users (id, name, email, role, points) VALUES (?, ?, ?, ?, ?)")
       .bind("usr-member", "Nadia Pelanggan", "member.demo@gmail.com", "member", 120),
   ]);
+  await ensureSettings();
+  // Migrasi: kolom product_id di rewards (reward terkait produk persediaan)
+  const rewardCols = await db().prepare("PRAGMA table_info(rewards)").all<{ name: string }>();
+  if (!rewardCols.results.some((c) => c.name === "product_id")) {
+    await db().prepare("ALTER TABLE rewards ADD COLUMN product_id TEXT").run();
+  }
+  // Migrasi: kolom order_type di orders (regular vs redeem) + order_id di redemptions
+  const orderCols = await db().prepare("PRAGMA table_info(orders)").all<{ name: string }>();
+  if (!orderCols.results.some((c) => c.name === "order_type")) {
+    await db().prepare("ALTER TABLE orders ADD COLUMN order_type TEXT NOT NULL DEFAULT 'regular'").run();
+  }
+  const redCols = await db().prepare("PRAGMA table_info(redemptions)").all<{ name: string }>();
+  if (!redCols.results.some((c) => c.name === "order_id")) {
+    await db().prepare("ALTER TABLE redemptions ADD COLUMN order_id TEXT").run();
+  }
   ready = true;
 }
 
 function json(data: unknown, init?: ResponseInit) { return Response.json(data, init); }
 function randomId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
+
+/* Settings: ongkir + WhatsApp. Default ongkir Rp5.000, WA nonaktif sampai token diisi. */
+async function getSettings() {
+  const rows = await db().prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
+  const map: Record<string, string> = {};
+  for (const r of rows.results) map[r.key] = r.value;
+  return {
+    deliveryFee: Math.max(0, Math.trunc(Number(map.delivery_fee ?? 5000))),
+    waEnabled: map.wa_enabled === "1",
+    waTarget: map.wa_target ?? "",
+    waGateway: map.wa_gateway ?? "wablas",
+    waHost: map.wa_host ?? "solo.wablas.com",
+    waTokenSet: Boolean(map.wa_token),
+    waSecretSet: Boolean(map.wa_secret),
+  };
+}
+
+async function ensureSettings() {
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('delivery_fee', '5000')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_enabled', '0')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_target', '')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_gateway', 'wablas')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_host', 'solo.wablas.com')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_token', '')").run();
+  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_secret', '')").run();
+}
+
+/* Normalisasi nomor HP → format internasional (08xx → 628xx). */
+function toInternationalPhone(raw: string): string {
+  let p = raw.replace(/[^\d]/g, "");
+  if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("+")) p = p.slice(1);
+  return p;
+}
+
+/* Kirim notifikasi WhatsApp via gateway (Wablas / Fonnte).
+   Gagal tidak pernah melempar — order tetap diproses. */
+async function notifyWhatsApp(payload: { orderNo: string; customerName: string; phone: string; fulfillment: string; paymentLabel: string; items: string; total: number; address: string }) {
+  try {
+    const rows = await db().prepare("SELECT key, value FROM settings WHERE key IN ('wa_enabled', 'wa_target', 'wa_gateway', 'wa_host', 'wa_token', 'wa_secret')").all<{ key: string; value: string }>();
+    const map: Record<string, string> = {};
+    for (const r of rows.results) map[r.key] = r.value;
+    if (map.wa_enabled !== "1" || !map.wa_token || !map.wa_target) return;
+    const lines = [
+      "🛒 *PESANAN BARU MASUK*",
+      "━━━━━━━━━━━━━━━━",
+      `No. Order : ${payload.orderNo}`,
+      `Pelanggan : ${payload.customerName}`,
+      `WhatsApp  : ${payload.phone}`,
+      `Layanan   : ${payload.fulfillment === "delivery" ? "🚚 Diantar" : "🏪 Ambil sendiri"}`,
+      `Pembayaran: ${payload.paymentLabel}`,
+      "━━━━━━━━━━━━━━━━",
+      ...payload.items,
+      "━━━━━━━━━━━━━━━━",
+      `*Total: ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(payload.total)}*`,
+    ];
+    if (payload.fulfillment === "delivery" && payload.address) {
+      lines.push(`📍 Alamat: ${payload.address}`);
+    }
+    const message = lines.join("\n");
+    const target = toInternationalPhone(map.wa_target);
+    const gateway = map.wa_gateway === "fonnte" ? "fonnte" : "wablas";
+    const headers: Record<string, string> = { "content-type": gateway === "fonnte" ? "application/json" : "application/x-www-form-urlencoded", authorization: map.wa_token };
+    // Wablas: bila akun mengaktifkan Secret Key, IP tidak perlu di-whitelist
+    if (gateway === "wablas" && map.wa_secret) headers["secret"] = map.wa_secret;
+    const body = gateway === "fonnte"
+      ? JSON.stringify({ target, message })
+      : new URLSearchParams({ phone: target, message }).toString();
+    const endpoint = gateway === "fonnte" ? "https://api.fonnte.com/send" : `https://${map.wa_host || "solo.wablas.com"}/api/send-message`;
+    const res = await fetch(endpoint, { method: "POST", headers, body });
+    if (!res.ok) console.error("[wa] gateway", res.status, await res.text());
+  } catch (error) {
+    console.error("[wa] gagal kirim:", error instanceof Error ? error.message : error);
+  }
+}
 
 function todayOrderNo() {
   const date = new Intl.DateTimeFormat("en-CA", {
@@ -205,7 +325,8 @@ export async function GET(request: Request) {
 
     if (view === "store") {
       const products = await db().prepare("SELECT * FROM products ORDER BY category, name").all<ProductRow>();
-      return json({ products: products.results, user });
+      const settings = await getSettings();
+      return json({ products: products.results, user, settings });
     }
     if (view === "me") return json({ user });
     if (view === "track") {
@@ -223,7 +344,9 @@ export async function GET(request: Request) {
       if (!user || user.role !== "member") return json({ error: "Silakan masuk sebagai member." }, { status: 401 });
       const orders = await db().prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC").bind(user.id).all<OrderRow>();
       const ledger = await db().prepare("SELECT * FROM loyalty_ledger WHERE user_id = ? ORDER BY created_at DESC").bind(user.id).all();
-      return json({ user, orders: await hydrateOrders(orders.results), ledger: ledger.results });
+      const rewards = await db().prepare("SELECT * FROM rewards WHERE active = 1 AND (stock IS NULL OR stock > 0) ORDER BY points_cost").all();
+      const redemptions = await db().prepare("SELECT * FROM redemptions WHERE user_id = ? ORDER BY created_at DESC").bind(user.id).all();
+      return json({ user, orders: await hydrateOrders(orders.results), ledger: ledger.results, rewards: rewards.results, redemptions: redemptions.results });
     }
     if (view === "admin") {
       if (!user || user.role !== "admin") return json({ error: "Akses admin diperlukan." }, { status: 401 });
@@ -236,7 +359,13 @@ export async function GET(request: Request) {
         db().prepare("SELECT * FROM inventory_movements ORDER BY created_at DESC LIMIT 200").all(),
       ]);
       const expenseTotal = (expenses.results as Array<{ amount: number }>).reduce((sum, e) => sum + Number(e.amount), 0);
+      const [settings, rewards, redemptions] = await Promise.all([
+        getSettings(),
+        db().prepare("SELECT * FROM rewards ORDER BY created_at DESC").all(),
+        db().prepare(`SELECT r.*, u.name AS user_name FROM redemptions r LEFT JOIN users u ON u.id = r.user_id ORDER BY r.created_at DESC LIMIT 100`).all(),
+      ]);
       return json({ user, orders: await hydrateOrders(orders.results), products: products.results, expenses: expenses.results, movements: movements.results,
+        settings, rewards: rewards.results, redemptions: redemptions.results,
         metrics: { revenue: completed?.revenue ?? 0, completed: completed?.total ?? 0, pending: pending?.total ?? 0, expenses: expenseTotal } });
     }
     return json({ error: "View tidak dikenali." }, { status: 400 });
@@ -271,6 +400,56 @@ export async function POST(request: Request) {
     }
 
     if (action === "create_order") return createOrder(request, body);
+
+    /* Redeem poin — khusus member: wajib form pemesanan, membuat order tipe "redeem"
+       yang masuk antrian pesanan admin (tag khusus di tab Pesanan). */
+    if (action === "redeem_reward") {
+      const user = await currentUser(request);
+      if (!user || user.role !== "member") return json({ error: "Silakan masuk sebagai member." }, { status: 401 });
+      const rewardId = String(body.rewardId ?? "");
+      const reward = await db().prepare("SELECT * FROM rewards WHERE id = ? AND active = 1").bind(rewardId).first<RewardRow>();
+      if (!reward) return json({ error: "Penawaran tidak ditemukan." }, { status: 404 });
+      if (reward.stock !== null && reward.stock <= 0) return json({ error: "Stok penawaran habis." }, { status: 409 });
+      if (user.points < reward.points_cost) return json({ error: "Poin tidak mencukupi." }, { status: 409 });
+      // Form pemesanan wajib (sama seperti checkout reguler)
+      const customerName = String(body.customerName ?? "").trim();
+      const phone = String(body.phone ?? "").trim();
+      const fulfillment = body.fulfillment === "pickup" ? "pickup" : "delivery";
+      const address = String(body.address ?? "").trim();
+      if (customerName.length < 2 || phone.replace(/\D/g, "").length < 9) return json({ error: "Nama dan nomor WhatsApp wajib valid." }, { status: 422 });
+      if (fulfillment === "delivery" && address.length < 8) return json({ error: "Alamat pengiriman belum lengkap." }, { status: 422 });
+      // Harga barang reward (0 jika tidak terhubung ke produk)
+      let productPrice = 0; const productId = reward.product_id ?? "";
+      if (reward.product_id) {
+        const product = await db().prepare("SELECT id, price FROM products WHERE id = ?").bind(reward.product_id).first<{ id: string; price: number }>();
+        if (!product) return json({ error: "Produk penawaran tidak ditemukan." }, { status: 422 });
+        productPrice = Number(product.price);
+      }
+      const now = new Date().toISOString();
+      const orderId = randomId("ord"); const orderNo = await nextOrderNo();
+      const redemptionId = randomId("rdm");
+      await db().batch([
+        db().prepare("UPDATE users SET points = points - ? WHERE id = ? AND points >= ?").bind(reward.points_cost, user.id, reward.points_cost),
+        db().prepare(`INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, order_type, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'paid', 'redeem', 0, 0, 'redeem', ?)`)
+          .bind(orderId, orderNo, user.id, customerName, phone, address, fulfillment, now),
+        db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, 'item', 1, ?, ?)")
+          .bind(orderId, productId, reward.name, productPrice, productPrice),
+        db().prepare("INSERT INTO redemptions (id, user_id, reward_id, reward_name, points_cost, status, order_id, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)")
+          .bind(redemptionId, user.id, reward.id, reward.name, reward.points_cost, orderId, now),
+        db().prepare("INSERT INTO loyalty_ledger (id, user_id, points, movement_type, order_id, created_at) VALUES (?, ?, ?, 'redeem', ?, ?)")
+          .bind(randomId("loy"), user.id, -reward.points_cost, orderId, now),
+        ...(reward.stock !== null ? [db().prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0").bind(reward.id)] : []),
+      ]);
+      // Notifikasi WhatsApp admin untuk order hasil tukar poin
+      void notifyWhatsApp({
+        orderNo, customerName: user.name, phone, fulfillment, address,
+        paymentLabel: "🎁 Tukar poin",
+        items: [`• ${reward.name} (${reward.points_cost} poin)`],
+        total: 0,
+      });
+      return json({ ok: true, orderNo, redemptionId });
+    }
 
     const user = await currentUser(request);
     if (!user || user.role !== "admin") return json({ error: "Akses admin diperlukan." }, { status: 401 });
@@ -308,6 +487,116 @@ export async function POST(request: Request) {
         .bind(randomId("exp"), category, description, amount, new Date().toISOString()).run();
       return json({ ok: true });
     }
+    if (action === "update_settings") {
+      const deliveryFee = body.deliveryFee === undefined ? null : Math.trunc(Number(body.deliveryFee));
+      if (deliveryFee !== null && (deliveryFee < 0 || !Number.isFinite(deliveryFee))) return json({ error: "Biaya ongkir tidak valid." }, { status: 422 });
+      const ops = [];
+      if (deliveryFee !== null) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('delivery_fee', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(deliveryFee)));
+      if (body.waTarget !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_target', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waTarget).trim()));
+      if (body.waGateway !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_gateway', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waGateway) === "fonnte" ? "fonnte" : "wablas"));
+      if (body.waHost !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_host', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waHost).trim().replace(/^https?:\/\//, "").replace(/\/$/, "")));
+      if (body.waEnabled !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(body.waEnabled ? "1" : "0"));
+      // Token: hanya ditimpa bila diisi (kosong = pertahankan token lama)
+      if (body.waToken !== undefined && String(body.waToken).trim() !== "") ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_token', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waToken).trim()));
+      // Secret key Wablas (opsional — membuat IP tidak perlu di-whitelist)
+      if (body.waSecret !== undefined && String(body.waSecret).trim() !== "") ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_secret', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waSecret).trim()));
+      if (ops.length) await db().batch(ops);
+      return json({ ok: true, settings: await getSettings() });
+    }
+    if (action === "test_whatsapp") {
+      // Kirim pesan uji ke nomor admin — butuh token terisi
+      const rows = await db().prepare("SELECT key, value FROM settings WHERE key IN ('wa_target', 'wa_gateway', 'wa_host', 'wa_token', 'wa_secret')").all<{ key: string; value: string }>();
+      const map: Record<string, string> = {};
+      for (const r of rows.results) map[r.key] = r.value;
+      if (!map.wa_token) return json({ error: "Token WhatsApp belum diisi. Isi token gateway dahulu." }, { status: 422 });
+      if (!map.wa_target) return json({ error: "Nomor tujuan WhatsApp belum diisi." }, { status: 422 });
+      const target = toInternationalPhone(map.wa_target);
+      const gateway = map.wa_gateway === "fonnte" ? "fonnte" : "wablas";
+      const message = "✅ *Tes Notifikasi Ardines*\n\nKoneksi WhatsApp gateway berhasil. Anda akan menerima notifikasi setiap ada pesanan baru.";
+      const headers: Record<string, string> = { "content-type": gateway === "fonnte" ? "application/json" : "application/x-www-form-urlencoded", authorization: map.wa_token };
+      if (gateway === "wablas" && map.wa_secret) headers["secret"] = map.wa_secret;
+      const body = gateway === "fonnte" ? JSON.stringify({ target, message }) : new URLSearchParams({ phone: target, message }).toString();
+      const endpoint = gateway === "fonnte" ? "https://api.fonnte.com/send" : `https://${map.wa_host || "solo.wablas.com"}/api/send-message`;
+      const res = await fetch(endpoint, { method: "POST", headers, body });
+      const text = await res.text();
+      if (!res.ok) return json({ error: `Gateway menolak (${res.status}): ${text.slice(0, 200)}` }, { status: 502 });
+      return json({ ok: true, gateway, host: map.wa_host || "solo.wablas.com", target, response: text.slice(0, 200) });
+    }
+    if (action === "create_reward") {
+      const name = String(body.name ?? "").trim();
+      const description = String(body.description ?? "").trim();
+      const pointsCost = Math.trunc(Number(body.pointsCost));
+      const stockRaw = body.stock === undefined || body.stock === null || body.stock === "" ? null : Math.trunc(Number(body.stock));
+      const productId = body.productId ? String(body.productId) : null;
+      if (name.length < 2 || !Number.isFinite(pointsCost) || pointsCost <= 0) return json({ error: "Nama dan biaya poin penawaran wajib valid." }, { status: 422 });
+      if (stockRaw !== null && (!Number.isFinite(stockRaw) || stockRaw < 0)) return json({ error: "Stok penawaran tidak valid." }, { status: 422 });
+      if (productId) {
+        const product = await db().prepare("SELECT id FROM products WHERE id = ?").bind(productId).first();
+        if (!product) return json({ error: "Produk persediaan tidak ditemukan." }, { status: 422 });
+      }
+      await db().prepare("INSERT INTO rewards (id, name, description, points_cost, stock, active, product_id, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+        .bind(randomId("rwd"), name, description, pointsCost, stockRaw, productId, new Date().toISOString()).run();
+      return json({ ok: true });
+    }
+    if (action === "update_reward") {
+      const rewardId = String(body.rewardId ?? "");
+      const reward = await db().prepare("SELECT * FROM rewards WHERE id = ?").bind(rewardId).first<RewardRow>();
+      if (!reward) return json({ error: "Penawaran tidak ditemukan." }, { status: 404 });
+      const name = String(body.name ?? reward.name).trim();
+      const description = String(body.description ?? reward.description).trim();
+      const pointsCost = Math.trunc(Number(body.pointsCost ?? reward.points_cost));
+      const stockRaw = body.stock === undefined || body.stock === null || body.stock === "" ? null : Math.trunc(Number(body.stock));
+      if (name.length < 2 || !Number.isFinite(pointsCost) || pointsCost <= 0) return json({ error: "Nama dan biaya poin penawaran wajib valid." }, { status: 422 });
+      if (stockRaw !== null && (!Number.isFinite(stockRaw) || stockRaw < 0)) return json({ error: "Stok penawaran tidak valid." }, { status: 422 });
+      const active = body.active === undefined ? reward.active : (body.active ? 1 : 0);
+      const productId = body.productId === undefined || body.productId === null || body.productId === "" ? reward.product_id : String(body.productId);
+      if (productId) {
+        const product = await db().prepare("SELECT id FROM products WHERE id = ?").bind(productId).first();
+        if (!product) return json({ error: "Produk persediaan tidak ditemukan." }, { status: 422 });
+      }
+      await db().prepare("UPDATE rewards SET name = ?, description = ?, points_cost = ?, stock = ?, active = ?, product_id = ? WHERE id = ?")
+        .bind(name, description, pointsCost, stockRaw, active, productId, rewardId).run();
+      return json({ ok: true });
+    }
+    if (action === "delete_reward") {
+      const rewardId = String(body.rewardId ?? "");
+      await db().prepare("DELETE FROM rewards WHERE id = ?").bind(rewardId).run();
+      return json({ ok: true });
+    }
+    if (action === "update_redemption") {
+      const redemptionId = String(body.redemptionId ?? "");
+      const status = String(body.status ?? "");
+      if (!["done", "cancelled"].includes(status)) return json({ error: "Status penukaran tidak valid." }, { status: 422 });
+      const redemption = await db().prepare("SELECT * FROM redemptions WHERE id = ?").bind(redemptionId).first<RedemptionRow>();
+      if (!redemption) return json({ error: "Penukaran tidak ditemukan." }, { status: 404 });
+      if (redemption.status === status) return json({ ok: true });
+      const now = new Date().toISOString();
+      const ops = [db().prepare("UPDATE redemptions SET status = ? WHERE id = ?").bind(status, redemptionId)];
+      if (status === "done" && redemption.status === "pending") {
+        // Pencatatan biaya: barang reward keluar = biaya operasional (Reward member)
+        const reward = await db().prepare("SELECT * FROM rewards WHERE id = ?").bind(redemption.reward_id).first<RewardRow>();
+        let amount = 0;
+        if (reward?.product_id) {
+          const product = await db().prepare("SELECT price FROM products WHERE id = ?").bind(reward.product_id).first<{ price: number }>();
+          amount = product ? Number(product.price) : 0;
+        }
+        const member = await db().prepare("SELECT name FROM users WHERE id = ?").bind(redemption.user_id).first<{ name: string }>();
+        ops.push(db().prepare("INSERT INTO expenses (id, category, description, amount, created_at) VALUES (?, 'Reward member', ?, ?, ?)")
+          .bind(randomId("exp"), `Reward: ${redemption.reward_name} (${member?.name ?? "member"})`, amount, now));
+      }
+      if (status === "cancelled" && redemption.status === "pending") {
+        // kembalikan poin + stok reward bila dibatalkan
+        ops.push(db().prepare("UPDATE users SET points = points + ? WHERE id = ?").bind(redemption.points_cost, redemption.user_id));
+        ops.push(db().prepare("INSERT INTO loyalty_ledger (id, user_id, points, movement_type, created_at) VALUES (?, ?, ?, 'refund', ?)")
+          .bind(randomId("loy"), redemption.user_id, redemption.points_cost, now));
+        const reward = await db().prepare("SELECT * FROM rewards WHERE id = ?").bind(redemption.reward_id).first<RewardRow>();
+        if (reward && reward.stock !== null) ops.push(db().prepare("UPDATE rewards SET stock = stock + 1 WHERE id = ?").bind(reward.id));
+        // sinkron: batalkan order redeem terkait
+        if (redemption.order_id) ops.push(db().prepare("UPDATE orders SET status = 'cancelled' WHERE id = ? AND status NOT IN ('completed', 'cancelled')").bind(redemption.order_id));
+      }
+      await db().batch(ops);
+      return json({ ok: true });
+    }
     return json({ error: "Aksi tidak dikenali." }, { status: 400 });
   } catch (error) {
     console.error("[api/app]", error);
@@ -336,7 +625,8 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
     if (product.stock - product.reserved < qty) return json({ error: `Stok ${product.name} tidak mencukupi.` }, { status: 409 });
     selected.push({ product, qty }); subtotal += product.price * qty;
   }
-  const shipping = shippingFor(fulfillment);
+  const settings = await getSettings();
+  const shipping = fulfillment === "delivery" ? settings.deliveryFee : 0;
   const total = subtotal + shipping;
   const user = await currentUser(request);
   const orderId = randomId("ord"); const orderNo = await nextOrderNo(); const now = new Date().toISOString();
@@ -354,6 +644,13 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
     );
   }
   await db().batch(statements);
+  // Notifikasi WhatsApp admin (fire-and-forget — kegagalan tidak membatalkan order)
+  void notifyWhatsApp({
+    orderNo, customerName, phone, fulfillment, address,
+    paymentLabel: { cod: "💵 COD", transfer: "🏦 Transfer", qris: "📱 QRIS" }[paymentMethod] ?? paymentMethod,
+    items: selected.map(({ product, qty }) => `• ${qty}× ${product.name}`),
+    total,
+  });
   return json({ ok: true, orderNo, orderId, total }, { status: 201 });
 }
 
@@ -366,11 +663,19 @@ function productFields(body: Record<string, unknown>) {
   const stock = Math.trunc(Number(body.stock ?? 0));
   const minStock = Math.trunc(Number(body.minStock ?? body.min_stock ?? 0));
   const accent = /^#[0-9a-fA-F]{6}$/.test(String(body.accent ?? "")) ? String(body.accent) : "#0B7A75";
+  // Gambar produk: opsional. Hanya terima data URL gambar (jpeg/png/webp/gif) ≤ 1.5MB agar D1 tetap ringan.
+  const rawImage = body.image == null ? "" : String(body.image).trim();
+  const image = rawImage === ""
+    ? null
+    : /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(rawImage) && rawImage.length <= 1_500_000
+      ? rawImage
+      : null;
+  if (rawImage !== "" && image === null) return null;
   const valid = sku.length >= 2 && sku.length <= 40 && name.length >= 2 && category.length >= 1 && unit.length >= 1
     && Number.isFinite(price) && price >= 0
     && Number.isFinite(stock) && stock >= 0
     && Number.isFinite(minStock) && minStock >= 0;
-  return valid ? { sku, name, category, unit, price, stock, minStock, accent } : null;
+  return valid ? { sku, name, category, unit, price, stock, minStock, accent, image } : null;
 }
 
 async function skuTaken(sku: string, excludeId?: string) {
@@ -385,8 +690,8 @@ async function createProduct(body: Record<string, unknown>) {
   const id = randomId("prd");
   const now = new Date().toISOString();
   await db().batch([
-    db().prepare("INSERT INTO products (id, sku, name, category, unit, price, stock, reserved, min_stock, accent) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)")
-      .bind(id, fields.sku, fields.name, fields.category, fields.unit, fields.price, fields.stock, fields.minStock, fields.accent),
+    db().prepare("INSERT INTO products (id, sku, name, category, unit, price, stock, reserved, min_stock, accent, image) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)")
+      .bind(id, fields.sku, fields.name, fields.category, fields.unit, fields.price, fields.stock, fields.minStock, fields.accent, fields.image),
     db().prepare("INSERT INTO inventory_movements (id, product_id, qty, movement_type, reason, created_at) VALUES (?, ?, ?, 'adjustment', 'Produk baru', ?)")
       .bind(randomId("mov"), id, fields.stock, now),
   ]);
@@ -400,8 +705,8 @@ async function updateProduct(body: Record<string, unknown>) {
   const fields = productFields(body);
   if (!fields) return json({ error: "Data produk tidak valid. Periksa SKU, nama, harga, dan stok." }, { status: 422 });
   if (await skuTaken(fields.sku, productId)) return json({ error: `SKU ${fields.sku} sudah dipakai produk lain.` }, { status: 409 });
-  await db().prepare("UPDATE products SET sku = ?, name = ?, category = ?, unit = ?, price = ?, min_stock = ?, accent = ? WHERE id = ?")
-    .bind(fields.sku, fields.name, fields.category, fields.unit, fields.price, fields.minStock, fields.accent, productId).run();
+  await db().prepare("UPDATE products SET sku = ?, name = ?, category = ?, unit = ?, price = ?, min_stock = ?, accent = ?, image = ? WHERE id = ?")
+    .bind(fields.sku, fields.name, fields.category, fields.unit, fields.price, fields.minStock, fields.accent, fields.image, productId).run();
   return json({ ok: true });
 }
 
@@ -419,9 +724,28 @@ async function updateOrder(body: Record<string, unknown>) {
   const order = await db().prepare("SELECT * FROM orders WHERE id = ?").bind(orderId).first<OrderRow>();
   if (!order) return json({ error: "Order tidak ditemukan." }, { status: 404 });
   if (!allowedTransitions(order.status, order.fulfillment).includes(target)) return json({ error: `Transisi ${order.status} ke ${target} tidak diizinkan.` }, { status: 409 });
-  const items = await orderItems(order.id) as Array<{ product_id: string; qty: number }>;
-  const statements = [db().prepare("UPDATE orders SET status = ? WHERE id = ?").bind(target, order.id)];
   const now = new Date().toISOString();
+  const statements = [db().prepare("UPDATE orders SET status = ? WHERE id = ?").bind(target, order.id)];
+  if (order.order_type === "redeem") {
+    // Order hasil tukar poin: stok barang dikelola lewat rewards.stock (bukan stok produk).
+    // Batal order → refund poin + batalkan redemption (bila masih pending) + kembalikan stok reward.
+    if (target === "cancelled") {
+      const redemption = await db().prepare("SELECT * FROM redemptions WHERE order_id = ?").bind(order.id).first<RedemptionRow>();
+      if (redemption && redemption.status === "pending") {
+        statements.push(
+          db().prepare("UPDATE users SET points = points + ? WHERE id = ?").bind(redemption.points_cost, redemption.user_id),
+          db().prepare("INSERT INTO loyalty_ledger (id, user_id, points, movement_type, created_at) VALUES (?, ?, ?, 'refund', ?)")
+            .bind(randomId("loy"), redemption.user_id, redemption.points_cost, now),
+          db().prepare("UPDATE redemptions SET status = 'cancelled' WHERE id = ?").bind(redemption.id),
+        );
+        const reward = await db().prepare("SELECT * FROM rewards WHERE id = ?").bind(redemption.reward_id).first<RewardRow>();
+        if (reward && reward.stock !== null) statements.push(db().prepare("UPDATE rewards SET stock = stock + 1 WHERE id = ?").bind(reward.id));
+      }
+    }
+    await db().batch(statements);
+    return json({ ok: true });
+  }
+  const items = await orderItems(order.id) as Array<{ product_id: string; qty: number }>;
   for (const item of items) {
     if (target === "preparing") {
       statements.push(
