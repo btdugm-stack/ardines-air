@@ -55,8 +55,11 @@ test("shippingFor: Rp5.000 untuk delivery, gratis lainnya", () => {
 
 test("allowedTransitions sesuai alur status", () => {
   assert.deepEqual(allowedTransitions("new", "delivery"), ["confirmed", "cancelled"]);
-  assert.deepEqual(allowedTransitions("confirmed", "pickup"), ["preparing", "cancelled"]);
-  assert.deepEqual(allowedTransitions("preparing", "delivery"), ["ready", "cancelled"]);
+  assert.deepEqual(allowedTransitions("confirmed", "delivery"), ["delivering", "cancelled"]);
+  assert.deepEqual(allowedTransitions("confirmed", "pickup"), ["completed", "cancelled"]);
+  // Pesanan lama dengan status yang sudah tidak dibuat tetap bisa dilanjutkan.
+  assert.deepEqual(allowedTransitions("preparing", "delivery"), ["delivering", "cancelled"]);
+  assert.deepEqual(allowedTransitions("preparing", "pickup"), ["completed", "cancelled"]);
   assert.deepEqual(allowedTransitions("ready", "delivery"), ["delivering", "cancelled"]);
   assert.deepEqual(allowedTransitions("ready", "pickup"), ["completed", "cancelled"]);
   assert.deepEqual(allowedTransitions("delivering", "delivery"), ["completed", "cancelled"]);

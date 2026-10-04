@@ -15,7 +15,7 @@
   --aqua: #dff5f1;
   --lime: #c9f24b;
   --paper: #f7faf8;
-  --muted: #667a7e;
+  --muted: #5e7074;   /* digelapkan dari #667a7e: 4,30:1 -> 4,94:1 di --paper */
   --line: #dce7e4;
   --white: #fff;
   --danger: #d95148;
@@ -48,14 +48,95 @@
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   
   /* Typography Scale */
-  --font-xs: 10px;
-  --font-sm: 12px;
+  /* Lantai 12px: skala lama turun sampai 10px dan dipakai untuk keterangan
+     sungguhan ("Pesan sebelum 20.30 WIB"), bukan sekadar hiasan. */
+  --font-xs: 12px;
+  --font-sm: 12.5px;
   --font-base: 14px;
   --font-lg: 16px;
   --font-xl: 18px;
   --font-2xl: 24px;
   --font-3xl: 32px;
   --font-4xl: 42px;
+
+  /* Peran permukaan — dipisah dari warna merek agar mode gelap bisa
+     membalik latar tanpa menyentuh 646 aturan satu per satu. */
+  --surface: #fff;        /* kartu, panel, modal */
+  --surface-2: #fbfdfc;   /* kolom isian, baris bergaris */
+  --deep: #082d3b;        /* blok gelap sengaja: footer, sidebar, hero auth */
+  --on-deep: #eaf4f2;     /* teks di atas --deep */
+  --overlay: rgba(7, 48, 58, 0.45);
+
+  /* Warna merek yang dipakai sebagai LATAR dipisah dari versi teks-nya:
+     di mode gelap teks perlu terang, latar tetap perlu gelap agar teks
+     putih di atasnya lolos kontras. */
+  --teal-solid: #087f78;   /* latar tombol utama, teks putih di atasnya */
+  --teal-solid-hover: #05645f; /* latar tombol utama saat hover, teks putih tetap lolos */
+  --lime-solid: #c9f24b;   /* chip aksen, teks gelap di atasnya */
+  --on-lime: #0c2c36;      /* teks di atas --lime-solid, gelap di kedua tema */
+  --warn-soft: #fff2d4;    /* latar peringatan lembut */
+  --surface-glass: rgba(255, 255, 255, 0.95); /* header/bar tembus pandang */
+
+  /* Warna semantik chip status/pembayaran. Nilainya dipilih agar lolos 4,5:1
+     di atas latar lembutnya masing-masing, di kedua tema. */
+  --st-warn: #8a5f00;
+  --st-info: #1f5f8b;
+  --st-ok: #1f6b3f;
+  --st-bad: #9b3b32;
+  --st-teal: #06635e;
+  --ok-soft: #dff6e8;
+  --bad-soft: #ffe4e1;
+  --info-soft: #e6f0f8;
+  /* --danger apa adanya hanya 4,02:1 di atas putih — varian teksnya digelapkan. */
+  --danger-teks: #b03a30;
+}
+
+/* ===== Mode gelap — PILIHAN, bukan bawaan =====
+   Aplikasi selalu mulai terang. Gelap hanya aktif saat pengguna menekan
+   tombol tema, yang menaruh data-theme="dark" di <html> dan menyimpannya
+   di localStorage. Preferensi sistem sengaja TIDAK dipakai otomatis.
+   Hanya token yang didefinisikan ulang; komponen tidak disentuh sama sekali. */
+:root[data-theme="dark"] {
+  --ink: #e8f1ef;
+  --navy: #dcebe8;
+  --teal: #3fb5aa;
+  --teal-dark: #6ad0c4;
+  --aqua: #10322f;
+  --lime: #d4f766;
+  --paper: #0b1618;
+  --muted: #93a8a7;
+  --line: #24393a;
+  --danger: #f0796f;
+  --success: #4fc98a;
+
+  --surface: #12211f;
+  --surface-2: #0e1b1a;
+  --deep: #061e28;
+  --on-deep: #eaf4f2;
+  --overlay: rgba(0, 0, 0, 0.62);
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
+
+    /* Latar tetap gelap agar teks putih di atasnya lolos 4.5:1 —
+       --teal terang hanya untuk teks dan garis. */
+  --teal-solid: #0a6f69;
+  --teal-solid-hover: #0c8079; /* putih di atasnya 4,79:1 */
+  --lime-solid: #b6dd3c;
+  --on-lime: #0c2c36;
+  --warn-soft: #3a2f16;
+  --surface-glass: rgba(18, 33, 31, 0.95);
+  --st-warn: #f0c56a;
+  --st-info: #8fc4ea;
+  --st-ok: #74d29b;
+  --st-bad: #f39a92;
+  --st-teal: #5fcfc3;
+  --ok-soft: #12331f;
+  --bad-soft: #38191a;
+  --info-soft: #14283a;
+  --danger-teks: #f0796f;
 }
 
 /* Base Styles */
@@ -74,7 +155,9 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Satu keluarga huruf untuk seluruh aplikasi (DESIGN.md). Font sistem hanya
+     cadangan selama berkasnya belum termuat. */
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: var(--font-base);
   line-height: 1.5;
 }
@@ -103,6 +186,7 @@ select:focus-visible {
 
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ============================================
@@ -114,7 +198,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--surface-glass);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -143,7 +227,9 @@ select:focus-visible {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+  /* Token "solid": tetap gelap di kedua tema. --teal dan --teal-dark adalah
+     warna teks, jadi di tema gelap keduanya terang dan ikon putih hilang. */
+  background: var(--teal-solid);
   display: grid;
   place-items: center;
   color: white;
@@ -160,7 +246,7 @@ select:focus-visible {
 .brand small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 2px;
   font-weight: 500;
 }
@@ -171,14 +257,14 @@ select:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 6px;
-  background: #f1f6f4;
+  background: var(--aqua);
   border-radius: var(--radius-lg);
 }
 
 .desktop-nav button {
   border: 0;
   background: none;
-  color: #50686c;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 700;
   padding: 11px 18px;
@@ -187,13 +273,13 @@ select:focus-visible {
 }
 
 .desktop-nav button.active {
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
 
 .desktop-nav button:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--surface) 50%, transparent);
 }
 
 /* Mobile Navigation - Enhanced touch targets */
@@ -212,7 +298,7 @@ select:focus-visible {
   min-width: 44px;
   border: 0;
   border-radius: var(--radius);
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   display: flex;
   align-items: center;
@@ -224,7 +310,7 @@ select:focus-visible {
 }
 
 .cart-button:hover {
-  background: var(--teal-dark);
+  background: var(--teal-solid-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
@@ -233,11 +319,11 @@ select:focus-visible {
   min-width: 22px;
   height: 22px;
   border-radius: 8px;
-  background: var(--lime);
-  color: var(--navy);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -248,20 +334,15 @@ select:focus-visible {
   font-size: var(--font-sm);
   font-weight: 700;
   padding: 6px 12px 6px 6px;
-  background: #edf7f5;
+  background: var(--aqua);
   border-radius: 999px;
-  transition: background var(--transition-base);
-}
-
-.user-pill:hover {
-  background: #d8f0ec;
 }
 
 .user-pill span {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--teal-solid);
   color: white;
   display: grid;
   place-items: center;
@@ -273,7 +354,7 @@ select:focus-visible {
   height: 44px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: white;
+  background: var(--surface);
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -294,7 +375,7 @@ select:focus-visible {
   right: 20px;
   z-index: 100;
   max-width: 440px;
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   border-radius: var(--radius-lg);
   padding: 16px 18px;
@@ -345,7 +426,7 @@ select:focus-visible {
   grid-template-columns: 1.05fr 0.95fr;
   align-items: center;
   gap: 64px;
-  background: linear-gradient(125deg, #edf9f6 0%, #fff 50%, #e6f5f3 100%);
+  background: linear-gradient(125deg, var(--aqua) 0%, var(--surface) 50%, var(--aqua) 100%);
   overflow: hidden;
   position: relative;
 }
@@ -363,7 +444,7 @@ select:focus-visible {
 }
 
 .eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.18em;
   color: var(--teal);
@@ -377,7 +458,8 @@ select:focus-visible {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--lime);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   box-shadow: 0 0 0 6px rgba(201, 242, 75, 0.2);
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -409,7 +491,7 @@ select:focus-visible {
 .hero-copy > p {
   font-size: 17px;
   line-height: 1.7;
-  color: #587075;
+  color: var(--muted);
   max-width: 570px;
   margin: 0;
 }
@@ -425,7 +507,7 @@ select:focus-visible {
 .primary {
   border: 0;
   border-radius: 13px;
-  background: var(--teal);
+  background: var(--teal-solid);
   color: white;
   font-weight: 800;
   font-size: var(--font-base);
@@ -441,7 +523,7 @@ select:focus-visible {
 
 .primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  background: var(--teal-dark);
+  background: var(--teal-solid-hover);
   box-shadow: 0 8px 24px rgba(8, 127, 120, 0.3);
 }
 
@@ -474,7 +556,8 @@ select:focus-visible {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--lime);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   font-weight: 900;
   font-size: var(--font-lg);
   box-shadow: var(--shadow-sm);
@@ -520,7 +603,7 @@ select:focus-visible {
 }
 
 .hero-stats span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 6px;
   font-weight: 500;
@@ -555,7 +638,7 @@ select:focus-visible {
   position: absolute;
   left: -28px;
   bottom: 32px;
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-lg);
   padding: 16px 20px;
   display: flex;
@@ -604,7 +687,7 @@ select:focus-visible {
 .service-strip {
   margin: -1px auto 0;
   max-width: 1120px;
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -644,7 +727,7 @@ select:focus-visible {
 }
 
 .service-strip span {
-  font-size: 11px;
+  font-size: 12px;
   color: #a9bdc2;
   margin-top: 4px;
   font-weight: 500;
@@ -679,7 +762,7 @@ select:focus-visible {
 .search-box {
   width: min(360px, 100%);
   height: 50px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   display: flex;
@@ -717,12 +800,12 @@ select:focus-visible {
 
 .category-row button {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   border-radius: 999px;
   padding: 12px 20px;
   font-size: 13px;
   font-weight: 700;
-  color: #536b70;
+  color: var(--muted);
   min-height: 44px;
 }
 
@@ -732,8 +815,8 @@ select:focus-visible {
 }
 
 .category-row button.active {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--deep);
+  border-color: var(--deep);
   color: white;
 }
 
@@ -751,7 +834,7 @@ select:focus-visible {
 }
 
 .product-card {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -768,8 +851,8 @@ select:focus-visible {
   height: 180px;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--accent) 15%, white),
-    color-mix(in srgb, var(--accent) 5%, white)
+    color-mix(in srgb, var(--accent) 15%, var(--surface)),
+    color-mix(in srgb, var(--accent) 5%, var(--surface))
   );
   position: relative;
   display: grid;
@@ -810,7 +893,7 @@ select:focus-visible {
   position: absolute;
   left: 16px;
   bottom: 14px;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
@@ -821,10 +904,10 @@ select:focus-visible {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: white;
+  background: var(--surface);
   border-radius: 999px;
   padding: 6px 10px;
-  font-size: 9px;
+  font-size: 12px;
   color: var(--teal);
   font-style: normal;
   font-weight: 800;
@@ -836,8 +919,8 @@ select:focus-visible {
 }
 
 .product-info .sku {
-  font-size: 9px;
-  color: #8ca0a3;
+  font-size: 12px;
+  color: var(--muted);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 700;
@@ -866,7 +949,7 @@ select:focus-visible {
 }
 
 .product-info > p span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 600;
 }
@@ -882,7 +965,7 @@ select:focus-visible {
 }
 
 .product-bottom > small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 600;
 }
@@ -902,7 +985,7 @@ select:focus-visible {
 }
 
 .add-button:hover {
-  background: var(--teal);
+  background: var(--teal-solid);
   color: white;
 }
 
@@ -917,11 +1000,11 @@ select:focus-visible {
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
-  color: var(--teal);
+  color: var(--st-teal); /* --teal hanya 4,28:1 di atas latar --aqua grup stok */
 }
 
 .stepper button:hover,
@@ -943,7 +1026,7 @@ select:focus-visible {
 .cart-panel {
   position: sticky;
   top: 96px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -956,7 +1039,7 @@ select:focus-visible {
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(to bottom, white, var(--paper));
+  background: linear-gradient(to bottom, var(--surface), var(--paper));
 }
 
 .cart-title > div span,
@@ -965,7 +1048,7 @@ select:focus-visible {
 }
 
 .cart-title span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -993,7 +1076,7 @@ select:focus-visible {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #f1f7f5;
+  background: var(--paper);
   display: grid;
   place-items: center;
   margin: auto;
@@ -1009,7 +1092,7 @@ select:focus-visible {
 }
 
 .empty-cart p {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   margin: 8px auto 0;
   max-width: 200px;
@@ -1046,13 +1129,13 @@ select:focus-visible {
 }
 
 .cart-line b {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink);
 }
 
 .cart-line small {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
   font-weight: 500;
@@ -1066,7 +1149,7 @@ select:focus-visible {
 
 .cart-summary {
   padding: 20px;
-  background: #f7faf9;
+  background: var(--surface-2);
   border-top: 1px solid var(--line);
 }
 
@@ -1080,7 +1163,7 @@ select:focus-visible {
 
 .cart-summary > small {
   display: block;
-  font-size: 9px;
+  font-size: 12px;
   color: var(--muted);
   margin: 8px 0 18px;
   text-align: center;
@@ -1115,7 +1198,7 @@ select:focus-visible {
   width: min(960px, 100%);
   max-height: 92vh;
   overflow: auto;
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-2xl);
   position: relative;
   padding: 40px;
@@ -1142,7 +1225,7 @@ select:focus-visible {
   height: 40px;
   border: 0;
   border-radius: 50%;
-  background: #f1f6f4;
+  background: var(--aqua);
   font-size: 20px;
   display: grid;
   place-items: center;
@@ -1195,7 +1278,7 @@ textarea,
 select {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #fbfdfc;
+  background: var(--surface-2);
   padding: 14px 16px;
   outline: none;
   color: var(--ink);
@@ -1209,11 +1292,11 @@ textarea:focus,
 select:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(8, 127, 120, 0.1);
-  background: white;
+  background: var(--surface);
 }
 
 input:disabled {
-  background: #eef2f1;
+  background: var(--surface-2);
   color: #9aa9ac;
   cursor: not-allowed;
 }
@@ -1232,7 +1315,7 @@ textarea {
 
 .choice-row button {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius);
   padding: 16px;
   display: flex;
@@ -1257,7 +1340,8 @@ textarea {
 }
 
 .order-review {
-  background: linear-gradient(to bottom, #f2f8f6, #e8f4f0);
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 24px;
   align-self: start;
@@ -1282,11 +1366,11 @@ textarea {
 .review-line {
   padding: 10px 0;
   border-bottom: 1px solid #dce9e5;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .review-fee {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 12px;
 }
@@ -1304,7 +1388,7 @@ textarea {
   display: block;
   text-align: center;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
   margin-top: 12px;
 }
@@ -1327,7 +1411,7 @@ textarea {
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--surface-glass);
     border-top: 1px solid var(--line);
     backdrop-filter: blur(20px) saturate(180%);
     padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
@@ -1342,8 +1426,8 @@ textarea {
     gap: 4px;
     border: 0;
     background: none;
-    color: #50686c;
-    font-size: 10px;
+    color: var(--muted);
+    font-size: 12px;
     font-weight: 700;
     padding: 10px 8px;
     border-radius: 12px;
@@ -1633,14 +1717,15 @@ textarea {
    ============================================ */
 .subpage {
   min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
   padding: 72px clamp(20px, 6vw, 96px) 96px;
-  background: linear-gradient(135deg, #e8f7f4 0%, #fff 100%);
+  background: linear-gradient(135deg, var(--aqua) 0%, var(--surface) 100%);
 }
 
 .track-card {
   max-width: 1200px;
   margin: auto;
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-2xl);
   border: 1px solid var(--line);
   display: grid;
@@ -1652,7 +1737,7 @@ textarea {
 
 .track-intro {
   padding: 56px;
-  background: linear-gradient(145deg, #f7fffd 0%, #e6f6f2 100%);
+  background: var(--paper);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1694,7 +1779,7 @@ textarea {
 }
 
 .track-intro form .form-error {
-  color: var(--danger);
+  color: var(--danger-teks);
   font-size: 12px;
   margin-top: 8px;
   display: block;
@@ -1702,7 +1787,7 @@ textarea {
 
 .track-result {
   padding: 56px;
-  background: white;
+  background: var(--surface);
 }
 
 .track-placeholder {
@@ -1713,7 +1798,7 @@ textarea {
   justify-content: center;
   align-items: center;
   text-align: center;
-  color: #9bb0b4;
+  color: var(--muted);
 }
 
 .track-placeholder svg {
@@ -1745,7 +1830,7 @@ textarea {
 }
 
 .track-order-head span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -1774,7 +1859,7 @@ textarea {
   gap: 18px;
   position: relative;
   padding-bottom: 28px;
-  color: #9dafb2;
+  color: var(--muted);
   transition: all var(--transition-base);
 }
 
@@ -1796,7 +1881,7 @@ textarea {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #edf2f1;
+  background: var(--aqua);
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -1811,7 +1896,7 @@ textarea {
 }
 
 .timeline > div.done > span {
-  background: var(--teal);
+  background: var(--teal-solid);
   color: white;
   box-shadow: 0 0 0 4px rgba(8, 127, 120, 0.1);
 }
@@ -1833,13 +1918,13 @@ textarea {
 }
 
 .timeline small {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 4px;
   font-weight: 500;
 }
 
 .track-items {
-  background: linear-gradient(to bottom, #f5f9f8, #edf5f3);
+  background: var(--paper);
   border-radius: var(--radius-lg);
   padding: 16px 20px;
   border: 1px solid var(--line);
@@ -1873,8 +1958,9 @@ textarea {
    ============================================ */
 .auth-page {
   min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
   padding: 72px 24px 96px;
-  background: linear-gradient(135deg, #e8f7f4 0%, #fff 50%, #f7fffd 100%);
+  background: linear-gradient(135deg, var(--aqua) 0%, var(--surface) 50%, var(--aqua) 100%);
   position: relative;
   overflow: hidden;
 }
@@ -1894,7 +1980,7 @@ textarea {
 .auth-card {
   max-width: 1000px;
   margin: auto;
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-2xl);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1909,7 +1995,7 @@ textarea {
 .auth-art {
   min-height: 560px;
   padding: 56px;
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   display: flex;
   flex-direction: column;
@@ -1990,8 +2076,8 @@ textarea {
   position: absolute;
   right: -16px;
   top: 28px;
-  background: var(--lime);
-  color: var(--navy);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   font-weight: 800;
   font-size: 13px;
   padding: 10px;
@@ -2036,7 +2122,7 @@ textarea {
   height: 52px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: white;
+  background: var(--surface);
   font-weight: 700;
   color: var(--ink);
   display: flex;
@@ -2059,16 +2145,16 @@ textarea {
 }
 
 .google-button > span {
-  font-size: 9px;
-  background: #edf5f3;
+  font-size: 12px;
+  background: var(--aqua);
   padding: 5px 8px;
   border-radius: 6px;
-  color: var(--teal);
+  color: var(--st-teal);
   font-weight: 800;
 }
 
 .demo-credential {
-  background: linear-gradient(to right, #f2f8f6, #e8f4f0);
+  background: linear-gradient(to right, var(--aqua), var(--aqua));
   border-left: 3px solid var(--lime);
   border-radius: var(--radius);
   padding: 16px;
@@ -2081,10 +2167,10 @@ textarea {
 }
 
 .demo-credential b {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--teal);
+  color: var(--st-teal);
   font-weight: 800;
 }
 
@@ -2096,14 +2182,14 @@ textarea {
 }
 
 .demo-credential small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
 }
 
 .info-box {
   padding: 14px 16px;
-  background: #fff4db;
+  background: var(--warn-soft);
   border: 1px solid #efd799;
   border-radius: var(--radius);
   font-size: 12px;
@@ -2159,7 +2245,8 @@ textarea {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--lime);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   box-shadow: 0 0 0 3px rgba(201, 242, 75, 0.2);
 }
 
@@ -2212,7 +2299,9 @@ textarea {
 }
 
 .points-card {
-  background: linear-gradient(135deg, var(--navy), var(--teal-dark));
+  /* --navy dan --teal-dark terang di tema gelap; --deep gelap di keduanya. */
+  background: var(--deep);
+  border: 1px solid var(--line);
   color: white;
   border-radius: var(--radius-xl);
   padding: 32px;
@@ -2233,7 +2322,7 @@ textarea {
 }
 
 .points-card > span {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   color: var(--lime);
   text-transform: uppercase;
@@ -2278,7 +2367,7 @@ textarea {
 }
 
 .member-summary > div {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   padding: 28px;
@@ -2322,7 +2411,7 @@ textarea {
 }
 
 .panel {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   padding: 28px;
@@ -2344,7 +2433,10 @@ textarea {
   color: var(--navy);
 }
 
-.panel-heading button {
+/* Gaya tautan-teks hanya untuk tombol polos ("Lihat semua"). Tombol .primary
+   dan .download-btn membawa latar dan warnanya sendiri; dulu aturan ini
+   menimpanya sehingga teks teal jatuh di atas latar teal saat hover. */
+.panel-heading button:where(:not(.primary):not(.download-btn)) {
   border: 0;
   background: none;
   color: var(--teal);
@@ -2353,7 +2445,7 @@ textarea {
   padding: 8px 0;
 }
 
-.panel-heading button:hover {
+.panel-heading button:where(:not(.primary):not(.download-btn)):hover {
   text-decoration: underline;
 }
 
@@ -2383,7 +2475,7 @@ textarea {
 }
 
 .order-list article small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 6px;
   font-weight: 500;
@@ -2408,7 +2500,7 @@ textarea {
   width: max-content;
   padding: 8px 12px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   border: 0;
   text-transform: uppercase;
@@ -2416,36 +2508,36 @@ textarea {
 }
 
 .status.new {
-  background: #fff2d4;
-  color: #9a6a00;
+  background: var(--warn-soft);
+  color: var(--st-warn);
 }
 
 .status.confirmed,
 .status.preparing,
 .status.ready,
 .status.delivering {
-  background: #dff0ff;
-  color: #246b9b;
+  background: var(--info-soft); /* warna mati #dff0ff tetap terang di tema gelap */
+  color: var(--st-info);
 }
 
 .status.completed {
-  background: #dff6e8;
-  color: #257748;
+  background: var(--ok-soft);
+  color: var(--st-ok);
 }
 
 .status.cancelled {
-  background: #ffe4e1;
-  color: #aa4239;
+  background: var(--bad-soft);
+  color: var(--st-bad);
 }
 
 .payment-chip.unpaid {
-  background: #fff2d4;
-  color: #976c10;
+  background: var(--warn-soft);
+  color: var(--st-warn);
 }
 
 .payment-chip.paid {
-  background: #dff6e8;
-  color: #257748;
+  background: var(--ok-soft);
+  color: var(--st-ok);
 }
 
 .empty-panel {
@@ -2478,18 +2570,20 @@ textarea {
    ============================================ */
 .admin-layout {
   min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
   display: grid;
   grid-template-columns: 240px 1fr;
-  background: #f3f7f6;
+  background: var(--paper);
 }
 
 .admin-sidebar {
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   padding: 32px 20px;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
   border-right: 1px solid rgba(0, 0, 0, 0.05);
 }
 
@@ -2514,7 +2608,7 @@ textarea {
 }
 
 .admin-sidebar > div:first-child small {
-  font-size: 10px;
+  font-size: 12px;
   color: #9bb5ba;
   font-weight: 600;
 }
@@ -2553,11 +2647,11 @@ textarea {
 
 .admin-sidebar nav button > span {
   margin-left: auto;
-  background: var(--lime);
-  color: var(--navy);
+  background: var(--lime-solid);
+  color: var(--on-lime);
   border-radius: 8px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -2574,7 +2668,7 @@ textarea {
   width: 36px;
   height: 36px;
   border-radius: 11px;
-  background: var(--teal);
+  background: var(--teal-solid);
   display: grid;
   place-items: center;
   font-weight: 800;
@@ -2602,7 +2696,7 @@ textarea {
 }
 
 .admin-user small {
-  font-size: 10px;
+  font-size: 12px;
   color: #8da9ae;
   margin-top: 4px;
   font-weight: 500;
@@ -2622,7 +2716,7 @@ textarea {
 }
 
 .admin-head span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2641,7 +2735,7 @@ textarea {
   display: flex !important;
   align-items: center;
   gap: 8px !important;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 10px 16px;
@@ -2666,7 +2760,7 @@ textarea {
 }
 
 .metric {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 24px;
@@ -2687,7 +2781,7 @@ textarea {
 }
 
 .metric span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2702,8 +2796,8 @@ textarea {
 }
 
 .metric small {
-  font-size: 11px;
-  color: #91a2a5;
+  font-size: 12px;
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -2771,7 +2865,7 @@ textarea {
 }
 
 .stock-mini small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
   font-weight: 500;
@@ -2779,7 +2873,7 @@ textarea {
 
 .stock-bar {
   height: 6px;
-  background: #edf2f1;
+  background: var(--aqua);
   border-radius: 999px;
   margin: 0 0 0 20px;
   overflow: hidden;
@@ -2807,10 +2901,10 @@ table {
 }
 
 th {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #8ca0a3;
+  color: var(--muted);
   padding: 12px;
   border-bottom: 2px solid var(--line);
   font-weight: 800;
@@ -2835,7 +2929,7 @@ td b {
 }
 
 td small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
   font-weight: 500;
@@ -2856,11 +2950,11 @@ td small {
 
 .row-actions button {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   height: 32px;
   border-radius: var(--radius-sm);
   padding: 0 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   min-width: 32px;
 }
@@ -2870,22 +2964,22 @@ td small {
 }
 
 .row-actions .next-action {
-  background: var(--teal);
+  background: var(--teal-solid);
   border-color: var(--teal);
   color: white;
 }
 
 .row-actions .next-action:hover {
-  background: var(--teal-dark);
+  background: var(--teal-solid-hover);
 }
 
 .row-actions .danger-action {
-  color: var(--danger);
+  color: var(--danger-teks);
 }
 
 .row-actions .danger-action:hover {
-  background: #ffe4e1;
-  border-color: var(--danger);
+  background: var(--bad-soft);
+  border-color: var(--danger-teks);
 }
 
 .stock-actions button {
@@ -2903,7 +2997,7 @@ td small {
 .sub-tabs {
   display: flex;
   gap: 6px;
-  background: #f1f6f4;
+  background: var(--aqua);
   border-radius: var(--radius);
   padding: 5px;
 }
@@ -2911,7 +3005,7 @@ td small {
 .sub-tabs button {
   border: 0;
   background: none;
-  color: #50686c;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 800;
   padding: 9px 16px;
@@ -2924,7 +3018,7 @@ td small {
 }
 
 .sub-tabs button.active {
-  background: white;
+  background: var(--surface);
   color: var(--teal);
   box-shadow: var(--shadow-sm);
 }
@@ -2933,7 +3027,7 @@ td small {
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
@@ -2947,12 +3041,12 @@ td small {
 }
 
 .row-icon.danger {
-  color: var(--danger);
+  color: var(--danger-teks);
 }
 
 .row-icon.danger:hover {
-  background: #ffe4e1;
-  border-color: var(--danger);
+  background: var(--bad-soft);
+  border-color: var(--danger-teks);
 }
 
 .movement-list {
@@ -2975,7 +3069,7 @@ td small {
 }
 
 .movement-badge {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   border-radius: 999px;
   padding: 6px 10px;
@@ -2985,22 +3079,22 @@ td small {
 }
 
 .movement-badge.reserve {
-  background: #fff2d4;
-  color: #976c10;
+  background: var(--warn-soft);
+  color: var(--st-warn);
 }
 
 .movement-badge.sale {
-  background: #dff0ff;
-  color: #246b9b;
+  background: var(--info-soft); /* warna mati #dff0ff tetap terang di tema gelap */
+  color: var(--st-info);
 }
 
 .movement-badge.return {
-  background: #ffe4e1;
-  color: #aa4239;
+  background: var(--bad-soft);
+  color: var(--st-bad);
 }
 
 .movement-badge.adjustment {
-  background: #e8e6ff;
+  background: var(--info-soft);
   color: #5b4bb5;
 }
 
@@ -3020,7 +3114,7 @@ td small {
 }
 
 .movement-list small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
   font-weight: 500;
@@ -3069,7 +3163,7 @@ td small {
 }
 
 .accent-row button.selected {
-  border-color: var(--navy);
+  border-color: var(--deep);
   box-shadow: 0 0 0 2px var(--navy);
   transform: scale(1.1);
 }
@@ -3083,7 +3177,7 @@ td small {
 
 .modal-actions .ghost {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius);
   padding: 14px 20px;
   font-size: 13px;
@@ -3125,7 +3219,7 @@ td small {
   width: 40px;
   height: 40px;
   border-radius: var(--radius);
-  background: #fff2e8;
+  background: var(--warn-soft);
   color: #d7782f;
   display: grid;
   place-items: center;
@@ -3148,7 +3242,7 @@ td small {
 }
 
 .expense-list small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
   font-weight: 500;
@@ -3156,7 +3250,7 @@ td small {
 
 .expense-list strong {
   font-size: 14px;
-  color: var(--danger);
+  color: var(--danger-teks);
   font-weight: 800;
 }
 
@@ -3172,7 +3266,7 @@ td small {
 .receipt-print {
   width: 400px;
   max-width: 100%;
-  background: white;
+  background: var(--surface);
   border-radius: var(--radius-xl);
   padding: 32px;
   border: 1px solid var(--line);
@@ -3199,7 +3293,7 @@ td small {
 }
 
 .receipt-brand small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
 }
@@ -3255,7 +3349,7 @@ td small {
 .receipt-items span {
   color: var(--muted);
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .receipt-items strong {
@@ -3281,8 +3375,8 @@ td small {
 }
 
 .receipt-status span {
-  font-size: 10px;
-  background: #edf5f3;
+  font-size: 12px;
+  background: var(--aqua);
   border-radius: 999px;
   padding: 8px 12px;
   font-weight: 700;
@@ -3314,7 +3408,7 @@ td small {
 }
 
 .receipt-controls > button:first-child {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   color: var(--ink);
 }
@@ -3328,9 +3422,9 @@ td small {
 }
 
 /* Footer */
-footer {
+.app-shell > footer {
   padding: 48px clamp(24px, 6vw, 96px);
-  background: var(--navy);
+  background: var(--deep);
   color: white;
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -3339,33 +3433,33 @@ footer {
   margin-top: 96px;
 }
 
-footer strong {
+.app-shell > footer strong {
   letter-spacing: 0.1em;
   font-size: 20px;
   font-weight: 800;
 }
 
-footer p {
+.app-shell > footer p {
   font-size: 13px;
   color: #9bb3b8;
   margin: 8px 0 0;
   line-height: 1.6;
 }
 
-footer span,
-footer b {
+.app-shell > footer span,
+.app-shell > footer b {
   display: block;
 }
 
-footer span {
-  font-size: 10px;
+.app-shell > footer span {
+  font-size: 12px;
   color: #8fa9ae;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
 }
 
-footer b {
+.app-shell > footer b {
   font-size: 14px;
   margin-top: 8px;
   font-weight: 700;
@@ -3430,7 +3524,7 @@ footer b {
 }
 
 .text-danger {
-  color: var(--danger);
+  color: var(--danger-teks);
 }
 
 .font-bold {
@@ -3544,7 +3638,7 @@ footer b {
   .admin-sidebar nav button {
     justify-content: center;
     padding: 12px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .admin-sidebar nav button > span {
@@ -3618,7 +3712,7 @@ footer b {
   .admin-sidebar nav button {
     min-width: 0;
     padding: 10px 8px;
-    font-size: 11px;
+    font-size: 12px;
     gap: 6px;
     white-space: nowrap;
     overflow: hidden;
@@ -3701,7 +3795,7 @@ footer b {
     bottom: calc(84px + env(safe-area-inset-bottom));
     z-index: 60;
     border: 0;
-    background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    background: var(--teal-solid);
     color: white;
     padding: 12px 18px;
     border-radius: 999px;
@@ -3723,8 +3817,8 @@ footer b {
     height: 22px;
     padding: 0 6px;
     border-radius: 999px;
-    background: var(--lime);
-    color: var(--navy);
+    background: var(--lime-solid);
+  color: var(--on-lime);
     font-size: 12px;
     line-height: 1;
   }
@@ -3755,7 +3849,7 @@ footer b {
   align-items: center;
   gap: 8px;
   border: 1.5px solid var(--teal);
-  background: white;
+  background: var(--surface);
   color: var(--teal-dark);
   font-size: 13px;
   font-weight: 800;
@@ -3855,7 +3949,7 @@ footer b {
 
 .product-art img + small,
 .product-art img ~ i {
-  text-shadow: 0 1px 6px rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 6px var(--surface-glass);
 }
 
 .image-uploader {
@@ -3883,7 +3977,7 @@ footer b {
 }
 
 .image-drop:hover {
-  background: color-mix(in srgb, var(--aqua) 70%, white);
+  background: color-mix(in srgb, var(--aqua) 70%, var(--surface)); /* putih mati gagal kontras di tema gelap */
 }
 
 .image-drop input[type="file"] {
@@ -3913,7 +4007,7 @@ footer b {
   right: 6px;
   width: 30px;
   height: 30px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-glass);
 }
 
 /* ============================================================
@@ -3929,7 +4023,7 @@ footer b {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   padding: 20px;
-  background: white;
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -4029,14 +4123,14 @@ footer b {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
-  background: white;
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
 .cashflow-summary span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -4059,12 +4153,12 @@ footer b {
 }
 
 .cashflow-summary .negative {
-  background: #fdf3f2;
+  background: var(--bad-soft);
   border-color: #f2d5d2;
 }
 
 .cashflow-summary .negative b {
-  color: var(--danger);
+  color: var(--danger-teks);
 }
 
 @media (max-width: 720px) {
@@ -4081,9 +4175,9 @@ footer b {
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #b45309, #d97706);
+  background: #b45309; /* putih di atas ujung gradasi lama (#d97706) hanya 3,19:1 */
   color: white;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.05em;
   vertical-align: middle;
@@ -4145,8 +4239,8 @@ footer b {
 }
 
 /* 2) footer mobile 1 kolom */
-@media (max-width: 360px) {
-  footer {
+@media (max-width: 480px) {
+  .app-shell > footer {
     grid-template-columns: 1fr;
     gap: 24px;
     padding: 40px 24px;
@@ -4247,7 +4341,7 @@ a:focus-visible {
    NOTIFIKASI — pembeda sukses/error (konsisten, kontras jelas)
    ============================================================ */
 .global-notice.success {
-  background: var(--teal-dark);
+  background: var(--teal-solid);
   border-left: 5px solid var(--lime);
 }
 
@@ -4348,7 +4442,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px 16px;
-  background: white;
+  background: var(--surface);
   cursor: pointer;
 }
 
@@ -4390,13 +4484,13 @@ a:focus-visible {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: white;
+  background: var(--surface);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s ease;
 }
 
 .toggle-row input[type="checkbox"]:checked {
-  background: var(--teal);
+  background: var(--teal-solid);
 }
 
 .toggle-row input[type="checkbox"]:checked::after {
@@ -4421,7 +4515,7 @@ a:focus-visible {
 .offline-products {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: white;
+  background: var(--surface);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -4630,7 +4724,7 @@ a:focus-visible {
   }
 
   .offline-form .choice-row button {
-    font-size: 11.5px;
+    font-size: 12px;
     padding: 8px 4px;
   }
 }
@@ -4664,13 +4758,13 @@ a:focus-visible {
   gap: 4px;
   padding: 10px;
   margin: 12px -10px 0;
-  background: #f2f8f7;
+  background: var(--aqua);
   border: 1px solid #dcebe9;
   border-radius: 8px;
 }
 
 .receipt-meta p.receipt-address span {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4693,7 +4787,7 @@ a:focus-visible {
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.05em;
   vertical-align: middle;
@@ -4701,13 +4795,13 @@ a:focus-visible {
 }
 
 .online-tag {
-  background: #e6f4f2;
-  color: #0b7a75;
+  background: var(--aqua);
+  color: var(--st-teal);
   border: 1px solid #bfe3df;
 }
 
 .offline-tag {
-  background: #eef0f7;
+  background: var(--info-soft);
   color: #3b4a7a;
   border: 1px solid #d5dae8;
 }
@@ -4743,7 +4837,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 14px 16px;
@@ -4957,7 +5051,7 @@ a:focus-visible {
   min-height: 40px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: white;
+  background: var(--surface);
   color: var(--navy);
   font-size: 16px;
   font-weight: 700;
@@ -4995,21 +5089,21 @@ a:focus-visible {
    STOCK WATCH — status stok sinkron dengan Persediaan
    ============================================================ */
 .stock-mini .status {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   padding: 4px 10px;
   white-space: nowrap;
 }
 
 .stock-mini .status.completed {
-  background: #e6f4f2;
+  background: var(--aqua);
   color: var(--teal-dark);
   border-radius: 999px;
 }
 
 .stock-mini .status.cancelled {
-  background: #fdeceb;
-  color: var(--danger);
+  background: var(--bad-soft);
+  color: var(--danger-teks);
   border-radius: 999px;
 }
 
@@ -5048,7 +5142,7 @@ a:focus-visible {
 }
 
 .paid-check small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 600;
 }
@@ -5062,4 +5156,1205 @@ a:focus-visible {
   accent-color: var(--teal);
   cursor: pointer;
   flex-shrink: 0;
+}
+
+
+/* ===== Hormati "kurangi gerak" =====
+   37 transisi dan 8 @keyframes sebelumnya berjalan tanpa syarat. Pengguna yang
+   menyalakan setelan ini di ponselnya — sering karena vertigo atau migrain —
+   tetap mendapat umpan balik, hanya tanpa gerak. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* ===== Pesanan admin: tabel di layar lebar, kartu di ponsel =====
+   Tabel 7 kolom butuh ~1.050 px. Di bawah 720 px ia hanya bisa digeser
+   menyamping di jendela ~270 px, jadi di sana kartu yang tampil.
+   Pembungkus .table-scroll TETAP dipertahankan sebagai jaring pengaman
+   untuk lebar di antaranya (tablet portrait). */
+/* Pilihan tabel atau kartu kini ditentukan lebar panelnya, bukan lebar layar:
+   lihat bagian "ADMIN LINTAS PLATFORM" di akhir berkas. */
+
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  box-shadow: var(--shadow-sm);
+}
+
+.order-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.order-card > header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 7px;
+  min-width: 0;
+}
+
+.order-card > header b { font-size: var(--font-base); font-weight: 800; color: var(--navy); }
+.order-card > header small { flex-basis: 100%; font-size: var(--font-sm); color: var(--muted); }
+.order-card > header .status { flex-shrink: 0; }
+
+.order-card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.order-card-body > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.order-card-body b { font-size: var(--font-base); font-weight: 700; color: var(--navy); }
+.order-card-body small { font-size: var(--font-sm); color: var(--muted); }
+.order-card-total { font-size: var(--font-xl); font-weight: 800; white-space: nowrap; }
+
+/* Aksi berikutnya jadi tombol utama selebar sisa baris — di tabel ia
+   tersembunyi di kolom paling kanan. Semua target minimal 44px. */
+.order-card-actions { display: flex; gap: 8px; }
+
+.order-card-actions button {
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.order-card-actions .next-action {
+  flex: 1;
+  border: 0;
+  background: var(--teal-solid);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(8, 127, 120, 0.25);
+}
+
+.order-card-actions .danger-action { color: var(--danger-teks); border-color: var(--danger-teks); }
+
+.order-card > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.order-card > footer small { font-size: var(--font-sm); color: var(--muted); }
+
+
+/* Wadah pengumuman khusus pembaca layar. role="alert" pada elemen yang baru
+   dibuat sering terlewat; region yang sudah ada sejak awal selalu terbaca. */
+.sr-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== Tombol tema =====
+   Terang adalah bawaan; tombol ini satu-satunya jalan ke mode gelap. */
+.theme-toggle {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover { color: var(--teal); border-color: var(--teal); }
+
+/* Ikon mana yang tampil ditentukan CSS, bukan state React — tidak ada selisih
+   hidrasi dan tidak ada kedipan saat halaman pertama dimuat. */
+.theme-toggle .ikon-terang { display: none; }
+:root[data-theme="dark"] .theme-toggle .ikon-gelap { display: none; }
+:root[data-theme="dark"] .theme-toggle .ikon-terang { display: block; }
+
+/* ===== Halaman pilih peran ===== */
+.landing-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-top {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px clamp(16px, 4vw, 40px) 0;
+}
+
+.landing {
+  flex: 1;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 44px) clamp(20px, 5vw, 32px) calc(40px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: clamp(24px, 5vw, 34px);
+}
+
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.landing-mark {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-xl);
+  margin-bottom: 6px;
+}
+
+.landing-hero h1 {
+  margin: 0;
+  font-size: clamp(26px, 7vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--navy);
+}
+
+.landing-tagline {
+  margin: 0;
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.landing-sub {
+  margin: 6px 0 0;
+  font-size: var(--font-base);
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 40ch;
+}
+
+.landing-options { display: flex; flex-direction: column; gap: 12px; }
+
+.landing-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 44px;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--navy);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+.landing-card:hover { border-color: var(--teal); transform: translateY(-2px); box-shadow: var(--shadow); }
+
+/* Jalur tamu adalah aksi utama — pesan tanpa login itu nilai jual aplikasi ini. */
+.landing-card.primary-card {
+  border: 0;
+  background: var(--teal-solid);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(8, 127, 120, 0.28);
+}
+
+.landing-card.primary-card:hover { box-shadow: 0 12px 32px rgba(8, 127, 120, 0.36); }
+
+.landing-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius);
+  background: var(--aqua);
+  color: var(--teal);
+  display: grid;
+  place-items: center;
+}
+
+.primary-card .landing-icon { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+.landing-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.landing-copy b { font-size: var(--font-lg); font-weight: 800; letter-spacing: -0.01em; }
+.landing-copy small { font-size: var(--font-base); line-height: 1.45; color: var(--muted); }
+.primary-card .landing-copy small { color: #fff; }
+
+.landing-go { font-size: var(--font-xl); font-weight: 800; opacity: 0.75; }
+
+.landing-track {
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--aqua);
+  border: 1px solid var(--line);
+}
+
+.landing-track p { margin: 0; font-size: var(--font-base); line-height: 1.5; color: var(--teal-dark); }
+.landing-track b { font-weight: 700; }
+
+/* Pintu pengelola: baris tenang, bukan tombol utama. Pengamanan sebenarnya
+   tetap login + pemeriksaan peran di server, bukan menyembunyikan tautan ini. */
+.landing-staff {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.landing-staff-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--font-base);
+  font-weight: 700;
+  transition: color var(--transition-fast);
+}
+
+.landing-staff-link:hover { color: var(--teal); }
+.landing-demo { font-size: var(--font-sm); color: var(--muted); text-align: center; }
+
+
+/* Warna aksen produk datang dari basis data dan nilainya bebas, jadi sebagian
+   gagal kontras — di kedua tema. Yang paling terang (Es Batu Eceran, #91D5E4)
+   hanya 1,64:1 di atas putih. Warnanya digeser secukupnya agar terbaca sambil
+   tetap mempertahankan rona produk: digelapkan di tema terang, dicerahkan di
+   tema gelap. Terukur: terburuk 5,89:1 (terang) dan 7,19:1 (gelap). */
+.product-art > span,
+.product-art small {
+  color: color-mix(in oklab, var(--accent) 60%, #000000);
+}
+
+:root[data-theme="dark"] .product-art > span,
+:root[data-theme="dark"] .product-art small {
+  color: color-mix(in oklab, var(--accent) 52%, #ffffff);
+}
+
+/* Label nav aktif: --teal hanya 4,38:1 di atas latar aktifnya yang bertintar. */
+.mobile-nav button.active,
+.mobile-nav button.active span {
+  color: var(--teal-dark);
+}
+
+:root[data-theme="dark"] .mobile-nav button.active,
+:root[data-theme="dark"] .mobile-nav button.active span {
+  color: var(--teal);
+}
+
+
+/* ============================================================
+   ARAH DESAIN (DESIGN.md): tenang dan fungsional
+   Dial ENERGY 1 / RHYTHM 2 / MOTION 1. Bagian ini menimpa aturan
+   lama di atas; alasan tiap keputusan ditulis di sampingnya.
+   ============================================================ */
+
+/* Tipografi: Plus Jakarta Sans untuk seluruh teks. Berkasnya font variabel
+   (ketebalan 400 sampai 800) subset latin, di-host sendiri agar ikut ter-cache
+   service worker. Ketebalan 900 di aturan lama dirender sebagai 800. */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-latin.woff2") format("woff2");
+}
+
+:root { --font-display: "Plus Jakarta Sans"; }
+
+h1, h2, h3,
+.brand strong,
+.product-info p b,
+.hero-stats b,
+.landing-copy b,
+.metric b,
+.points-card b,
+.review-total b,
+.order-card-total,
+.receipt-total b {
+  font-family: var(--font-display), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Label kecil pakai huruf biasa. Kapital renggang disisakan untuk chip status
+   dan kepala tabel, tempat ia membedakan label dari isi. */
+.cart-title span,
+.track-order-head span,
+.demo-credential b,
+.points-card > span,
+.admin-head span,
+.metric span,
+.cashflow-summary span,
+.app-shell > footer span {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Gerak: MOTION 1 berarti hanya umpan balik sentuh dan hover. Kartu status toko
+   tidak lagi mengambang, dan titiknya diam. */
+.floating-card { animation: none; }
+.floating-card .pulse { box-shadow: none; }
+.floating-card.tutup .pulse { background: var(--muted); }
+
+/* Latar: lingkaran gradasi di belakang hero dan halaman masuk tidak membawa
+   informasi apa pun. */
+.hero::before,
+.auth-page::before,
+.auth-art::before { display: none; }
+
+/* Kaca: buram hanya di bilah atas dan navigasi bawah, karena konten menggulir
+   di baliknya. Latar modal cukup dengan lapisan gelap. */
+.modal-backdrop { backdrop-filter: none; }
+
+/* Bayangan menandai lapisan yang benar-benar di atas halaman (modal, bilah,
+   keranjang mengambang, notifikasi). Kartu yang duduk di halaman cukup garis tepi. */
+.panel,
+.reward-card,
+.order-card,
+.service-strip,
+.landing-card:not(.primary-card) { box-shadow: none; }
+.track-card,
+.auth-card { box-shadow: var(--shadow); }
+
+/* Pendar berwarna hanya di dua aksi utama: kartu "Pesan langsung" di landing dan
+   keranjang mengambang di ponsel. Tombol utama lain tetap datar saat diam. */
+.primary,
+.brand-mark,
+.order-card-actions .next-action { box-shadow: none; }
+
+.auth-art > .auth-rule {
+  margin-top: 16px;
+  color: var(--on-deep);
+  font-weight: 700;
+}
+
+.app-shell > footer a { color: inherit; }
+
+.catalog-state { align-self: start; }
+.catalog-state .primary { margin-top: 12px; }
+
+/* Nama brand di sidebar admin dan footer memakai huruf yang sama dengan header,
+   tanpa spasi antarhuruf yang direnggangkan. */
+.admin-sidebar > div:first-child b,
+.app-shell > footer strong {
+  font-family: var(--font-display), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+/* Judul panel tanpa label di atasnya tidak perlu jarak atas, dan tidak boleh
+   berdempetan dengan tombol di sebelahnya. */
+.panel-heading { gap: 12px; }
+.panel-heading h2:first-child { margin-top: 0; }
+
+/* Ringkasan = pemantauan: jumlah pesanan per status, tanpa tombol aksi.
+   Angka nol diredupkan supaya status yang butuh perhatian menonjol. */
+.status-monitor {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+}
+
+.status-monitor > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.status-monitor b {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--navy);
+}
+
+.status-monitor .kosong b { color: var(--muted); }
+
+.admin-content .panel-heading.monitor-sub {
+  margin: 28px 0 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.arus-kas-panel { margin-top: 0; }
+
+/* Panel stok di Ringkasan sempit: judul diperkecil agar muat sebaris dengan tombolnya. */
+.stock-watch .panel-heading h2 { font-size: 20px; }
+.panel-heading button { white-space: nowrap; }
+
+
+/* ============================================================
+   ADMIN LINTAS PLATFORM
+   Satu sumber untuk tata letak konsol admin di ponsel, tablet, laptop,
+   dan monitor lebar. Menimpa aturan admin yang tersebar di atas.
+
+   Prinsip:
+   - Kerangka (navigasi) mengikuti lebar LAYAR: bilah tab di bawah 1101 px,
+     sidebar di atasnya.
+   - Isi (grid, tabel atau kartu) mengikuti lebar WADAHNYA lewat container
+     query, jadi panel sempit di layar lebar tetap memilih bentuk yang muat.
+   - Target sentuh mengikuti jenis penunjuk, bukan lebar layar: tablet besar
+     dan laptop layar sentuh tetap mendapat 44 px.
+   ============================================================ */
+
+/* --- Kerangka: bilah tab (ponsel dan tablet) --- */
+.admin-layout {
+  display: block;
+  min-height: 0;
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: 72px;
+  z-index: 20;
+  min-height: 0;
+  padding: 6px clamp(8px, 2vw, 24px);
+  flex-direction: row;
+  align-items: center;
+  border-right: 0;
+}
+
+.admin-sidebar > div:first-child,
+.admin-user {
+  display: none;
+}
+
+.admin-sidebar nav {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* Ikon di atas label: lima tab muat di 320 px tanpa memotong teksnya. */
+.admin-sidebar nav button {
+  position: relative;
+  min-width: 0;
+  min-height: 52px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 0;
+  font-size: clamp(10px, 3vw, 12px);
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.admin-sidebar nav button b { font-weight: inherit; }
+
+.admin-sidebar nav button svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.admin-sidebar nav button > span {
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 6px);
+  margin: 0;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .admin-sidebar { top: 64px; }
+}
+
+/* Tablet: ikon dan label sebaris. */
+@media (min-width: 600px) {
+  .admin-sidebar nav button {
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .admin-sidebar nav button > span {
+    position: static;
+    padding: 2px 7px;
+  }
+}
+
+/* Ponsel mendatar: header, bilah tab, dan navigasi bawah bersama-sama memakan
+   lebih dari separuh tinggi layar, jadi bilah tab ikut menggulir. */
+@media (max-height: 480px) and (max-width: 1100px) {
+  .admin-sidebar { position: static; }
+}
+
+/* --- Kerangka: sidebar (laptop dan desktop) --- */
+@media (min-width: 1101px) {
+  .admin-layout {
+    display: grid;
+    grid-template-columns: 224px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  /* Menempel di bawah header agar navigasi dan akun tetap terlihat saat
+     daftar pesanan panjang digulir. */
+  .admin-sidebar {
+    height: calc(100vh - 72px);
+    height: calc(100dvh - 72px);
+    overflow-y: auto;
+    padding: 28px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-sidebar > div:first-child { display: grid; }
+  .admin-user { display: flex; }
+
+  .admin-sidebar nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .admin-sidebar nav button {
+    min-height: 44px;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    text-align: left;
+  }
+
+  .admin-sidebar nav button > span {
+    margin-left: auto;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* --- Isi --- */
+.admin-content {
+  container-type: inline-size;
+  container-name: admin;
+  max-width: 1560px; /* di monitor lebar, baris tabel tidak melar tanpa batas */
+  padding: 24px 16px 96px;
+}
+
+@media (min-width: 721px) {
+  .admin-content { padding: 32px clamp(20px, 2.4vw, 48px) 96px; }
+}
+
+.admin-head { margin-bottom: 24px; }
+.admin-head h1 { font-size: clamp(24px, 4vw, 32px); }
+
+.metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-grid,
+.finance-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+@container admin (max-width: 419px) {
+  .metric-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@container admin (min-width: 860px) {
+  .finance-grid {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 24px;
+  }
+}
+
+@container admin (min-width: 900px) {
+  .metric-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@container admin (min-width: 1000px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr);
+    gap: 24px;
+  }
+}
+
+/* Panel jadi wadah ukur: tabel dan kartu di dalamnya memilih bentuk dari
+   lebar panel itu sendiri. */
+.admin-content .panel {
+  container-type: inline-size;
+  container-name: panel;
+  padding: 20px 16px;
+}
+
+@container admin (min-width: 700px) {
+  .admin-content .panel { padding: 28px; }
+}
+
+.admin-content .panel-heading {
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.admin-content .head-actions { gap: 8px 12px; }
+
+/* Bilah alat panel: satu ukuran untuk semua kontrolnya (tab filter, tombol
+   utama, tombol unduh), supaya tiap panel terbaca sebagai pola yang sama. */
+.sub-tabs button,
+.primary.small,
+.download-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 13px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+  justify-content: center;
+}
+
+.sub-tabs { padding: 2px; gap: 2px; }
+.sub-tabs button { min-height: 40px; border-radius: 10px; }
+.sub-tabs button.active { color: var(--st-teal); }
+
+/* Panel sempit: tab filter selebar panel dengan bagian sama rata, lalu tombol
+   berbagi satu baris sama lebar. Tidak ada kontrol yang turun baris sendirian. */
+@container panel (max-width: 560px) {
+  .head-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .head-actions .sub-tabs {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .head-actions > button { width: 100%; }
+
+  .panel-heading > .download-btn,
+  .panel-heading > .primary { width: 100%; }
+}
+
+/* Daftar stok sudah dibatasi enam produk; tanpa area gulir di dalam halaman. */
+.stock-watch {
+  max-height: none;
+  overflow: visible;
+}
+
+.admin-content .table-scroll {
+  margin: 0;
+  padding: 0;
+}
+
+/* Tabel dipadatkan agar tujuh kolom pesanan muat di laptop 1366 px. */
+.admin-content th,
+.admin-content td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.admin-content th { letter-spacing: 0.04em; }
+
+.order-table .status,
+.order-table .payment-chip {
+  padding: 6px 10px;
+  letter-spacing: 0.02em;
+}
+
+/* Nama pelanggan dan nama produk boleh turun baris agar lebar tabel terbatas. */
+.order-table td:nth-child(2),
+.order-table td:nth-child(3) {
+  white-space: normal;
+  min-width: 96px;
+}
+
+/* Pesanan: kartu secara bawaan, tabel hanya saat ketujuh kolomnya muat tanpa
+   digeser. Kolom Aksi ada di paling kanan, jadi tabel yang terpotong berarti
+   tombolnya tidak terlihat. */
+.order-table-wrap { display: none; }
+
+.order-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.order-cards > .empty-panel { grid-column: 1 / -1; }
+
+/* 1000 px: tabel butuh minimal 968 px (terukur), sisanya ruang untuk label
+   aksi yang lebih panjang seperti "Mulai siapkan". */
+@container panel (min-width: 1000px) {
+  .order-table-wrap { display: block; }
+  .order-cards { display: none; }
+}
+
+/* Persediaan: di panel sempit tiap baris tabel menjadi kartu berlabel. */
+@container panel (max-width: 819px) {
+  .inventory-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .inventory-table table,
+  .inventory-table tr,
+  .inventory-table td {
+    display: block;
+  }
+
+  .inventory-table table { white-space: normal; }
+
+  .inventory-table tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 12px;
+  }
+
+  .inventory-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+  }
+
+  .inventory-table td {
+    padding: 0;
+    border: 0;
+    font-size: 13px;
+  }
+
+  .inventory-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .inventory-table td:first-child,
+  .inventory-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .inventory-table td:last-child {
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .inventory-table .row-actions { flex-wrap: wrap; }
+}
+
+/* Peramban tanpa container query (Chrome < 105, Safari < 16): kembali ke
+   aturan berbasis lebar layar. Tabel persediaan tetap tabel dan bisa digeser. */
+@supports not (container-type: inline-size) {
+  @media (min-width: 900px) {
+    .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .finance-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+  }
+
+  @media (min-width: 1280px) {
+    .order-table-wrap { display: block; }
+    .order-cards { display: none; }
+  }
+
+  .admin-content .table-scroll { overflow-x: auto; }
+}
+
+/* Di 320 px tombol aksi kartu tidak muat sebaris; aksi utama boleh turun baris
+   daripada teksnya keluar dari tombol. */
+.order-card-actions { flex-wrap: wrap; }
+.order-card-actions .next-action { flex: 1 1 120px; }
+
+/* Riwayat pemesanan (Keuangan): empat kolom hanya saat panelnya cukup lebar.
+   Di panel sempit nominal naik ke baris pertama dan daftar item di bawahnya. */
+.admin-content .order-list article {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 14px 0;
+}
+
+.admin-content .order-list article > p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.admin-content .order-list article > .status {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@container panel (min-width: 640px) {
+  .admin-content .order-list article {
+    grid-template-columns: minmax(150px, 1.2fr) minmax(0, 2fr) auto auto;
+    gap: 12px;
+  }
+
+  .admin-content .order-list article > p,
+  .admin-content .order-list article > .status {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* Arus kas: tiga kotak sebaris hanya saat panelnya muat. */
+.cashflow-summary { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+
+/* Pesan kosong di dalam daftar tidak ikut grid baris daftar itu. */
+.expense-list > .empty-panel,
+.movement-list > .empty-panel {
+  display: block;
+}
+
+/* Riwayat stok sudah berhalaman; tanpa area gulir kedua di dalam halaman. */
+.movement-list {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Chip pembayaran adalah tombol setinggi target sentuh; teksnya di tengah. */
+.payment-chip { align-items: center; }
+
+.order-card-actions .danger-action { padding: 0 12px; }
+
+/* Header di ponsel 320 px: empat tombol plus brand melebihi lebar layar. */
+@media (max-width: 359px) {
+  .site-header { padding: 0 10px; }
+  .header-actions { gap: 6px; }
+  .brand { min-width: 0; gap: 8px; }
+}
+
+/* ============================================================
+   MODAL DAN ORDER OFFLINE LINTAS PLATFORM
+   - Ponsel (<= 720 px): modal menjadi lembar selayar penuh. Jarak latar 20 px
+     ditambah padding modal membuat isi hanya ~270 px di layar 390 px.
+   - Ponsel dan tablet (<= 900 px): order offline satu kolom, daftar produk
+     ikut gulir halaman (tanpa area gulir kedua), dan total beserta tombol
+     simpan menempel di bawah supaya selalu terlihat.
+   - Di atas 900 px: dua kolom seperti semula.
+   ============================================================ */
+.offline-modal { width: 100%; }
+
+.offline-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.offline-search:focus-within {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(8, 127, 120, 0.15);
+}
+
+.offline-list b { overflow-wrap: anywhere; }
+
+/* Tombol jumlah menempati tempat yang sama dengan tombol Tambah: tepi kanan. */
+.offline-list .stepper { margin-left: auto; }
+
+.offline-summary { box-shadow: 0 -8px 24px rgba(7, 48, 58, 0.08); }
+.offline-summary .primary { padding: 12px 16px; }
+.offline-summary .review-total b { font-size: 20px; }
+
+@media (max-width: 900px) {
+  /* Anak .offline-grid dan .offline-form naik menjadi anak langsung <form>,
+     sehingga ringkasan bisa menempel sepanjang seluruh isi modal. */
+  .offline-grid,
+  .offline-form {
+    display: contents;
+  }
+
+  /* Tanpa padding bawah, ringkasan yang menempel rata dengan tepi bawah modal. */
+  .modal.offline-modal { padding-bottom: 0; }
+
+  .offline-modal form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .offline-products {
+    border: 0;
+    padding: 0;
+    background: none;
+  }
+
+  .offline-list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .offline-list > div { padding: 12px 0; }
+
+  .offline-summary {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+    margin: 0 -20px;
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: 0 -8px 24px rgba(7, 48, 58, 0.08);
+  }
+
+  .offline-summary .review-total,
+  .offline-summary .primary {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Dua kolom: di layar pendek (laptop 768 px) total dan tombol simpan tetap
+   terlihat saat kolom formulir digulir. */
+@media (min-width: 901px) {
+  .offline-summary {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .offline-summary {
+    margin: 0 -40px;
+    padding-left: 40px;
+    padding-right: 40px;
+    border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
+  }
+}
+
+@media (max-width: 720px) {
+  .modal-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    padding: 20px 20px 28px;
+    padding-top: calc(20px + env(safe-area-inset-top));
+  }
+
+  .modal-head { padding-right: 52px; } /* ruang tombol tutup */
+  .modal-head h2 { font-size: 22px; }
+}
+
+/* ============================================================
+   KONSISTENSI LINTAS TAMPILAN
+   Aturan yang sama untuk toko, member, dan admin: padding panel, kisi
+   formulir, tombol pilihan, dan kartu produk di ponsel.
+   ============================================================ */
+
+/* Formulir dua kolom: kolom boleh menyusut (kolom isian punya lebar bawaan
+   yang mendorong kisi keluar layar), dan menjadi satu kolom di ponsel. */
+.product-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.product-form-grid input,
+.product-form-grid select { width: 100%; min-width: 0; }
+
+/* Tombol pilihan (cara menerima, metode bayar): teks tidak menempel ke tepi. */
+.choice-row button,
+.offline-form .choice-row button {
+  padding: 10px 12px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.google-button { padding-left: 16px; padding-right: 16px; }
+
+/* Kartu ringkasan member bukan tombol: tidak terangkat saat hover. */
+.member-summary > div:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Halaman member: kartu poin 360 px + tiga kartu angka tidak muat di tablet.
+   Di bawah 1000 px kartu poin di atas, tiga angka sebaris di bawahnya. */
+.member-grid { grid-template-columns: minmax(0, 360px) minmax(0, 1fr); }
+.member-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.member-summary > div { min-width: 0; }
+
+@media (max-width: 1000px) {
+  .member-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Tombol jumlah (kurang/tambah) 40 px di semua layar, sama dengan tombol aksi lain. */
+.stepper button {
+  width: 40px;
+  height: 40px;
+}
+
+/* Nomor layanan di footer bisa diketuk; areanya setinggi target sentuh. */
+.app-shell > footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+@media (max-width: 720px) {
+  .panel { padding: 20px 16px; }
+
+  .product-form-grid { grid-template-columns: minmax(0, 1fr); }
+
+  /* Kategori: satu baris yang bisa digeser, seperti rak kategori marketplace,
+     bukan tombol yang turun baris sendirian. */
+  .category-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 20px -16px;
+    padding: 0 16px 4px;
+    scrollbar-width: none;
+  }
+
+  .category-row button { flex-shrink: 0; }
+
+  /* Katalog dua kolom: lebih banyak produk terlihat tanpa menggulir jauh. */
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .product-art { height: 104px; }
+  /* Di kartu sempit ikon diperkecil dan label kategori dilepas: kategorinya
+     sudah terbaca dari rak kategori di atas, dan keduanya tadinya bertumpuk. */
+  .product-art > span { font-size: 44px; }
+  .product-art small { display: none; }
+  .product-info { padding: 12px; }
+  .product-info h3 { font-size: 14px; line-height: 1.3; }
+  .product-info > p b { font-size: 16px; }
+
+  .product-bottom {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  .product-bottom .add-button,
+  .product-bottom .stepper {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .product-bottom .stepper { justify-content: space-between; }
+
+  /* Tiga angka member sebaris, bukan tiga kartu bertumpuk. */
+  .member-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .member-summary > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 14px 12px;
+  }
+}
+
+/* Filter riwayat pesanan: kolom mengisi lebar panel, turun baris sendiri di
+   panel sempit. Kontrolnya setinggi tombol bilah alat. */
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.filter-bar label { gap: 6px; min-width: 0; }
+
+.filter-bar input,
+.filter-bar select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: var(--surface);
+}
+
+.filter-bar .download-btn { width: 100%; }
+.filter-bar .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.filter-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Layar sentuh berapa pun lebarnya: target minimal 44 px. */
+@media (pointer: coarse) {
+  .admin-content .row-actions button,
+  .admin-content .stock-actions button,
+  .admin-content .payment-chip,
+  .admin-content .sub-tabs button,
+  .admin-content .pagination-btns button,
+  .admin-content .panel-heading button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

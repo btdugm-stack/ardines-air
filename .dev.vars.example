@@ -1,0 +1,12 @@
+# Salin ke .dev.vars untuk mencoba MODE PRODUKSI secara lokal.
+# Buat nilai hash-nya dengan: node scripts/hash-password.mjs "password-baru"
+#
+# Selama kedua baris ini KOSONG atau berkasnya tidak ada, aplikasi berjalan
+# dalam MODE DEMO: akun dummy admin & member aktif untuk cek fungsi.
+# Begitu keduanya terisi, mode demo mati otomatis.
+#
+# Di produksi jangan pakai berkas ini — pasang sebagai Workers Secret:
+#   npx wrangler secret put ADMIN_EMAIL
+#   npx wrangler secret put ADMIN_PASSWORD_HASH
+ADMIN_EMAIL="admin@domain-anda.com"
+ADMIN_PASSWORD_HASH="pbkdf2$210000$<salt-base64>$<hash-base64>"

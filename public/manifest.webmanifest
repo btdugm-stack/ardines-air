@@ -1,16 +1,18 @@
 {
-  "name": "Ardines — Depot Air Mineral",
+  "name": "Ardines Group: Distributor Es Kristal & Depot Air Minum",
   "short_name": "Ardines",
-  "description": "Pesan air galon, air botol, dan es batu dengan cepat. Kelola order, stok, dan operasional dalam satu aplikasi.",
+  "description": "Distributor es kristal dan depot air minum. Pesan galon, air botol, dan es kristal, diantar atau ambil sendiri.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#f4f9f8",
   "theme_color": "#087f78",
   "lang": "id",
-  "categories": ["shopping", "business"],
+  "categories": [
+    "shopping",
+    "business"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -35,6 +37,51 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "shortcuts": [
+    {
+      "name": "Lacak pesanan",
+      "short_name": "Lacak",
+      "url": "/?view=track",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Dasbor admin",
+      "short_name": "Admin",
+      "url": "/?view=admin",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/narrow.webp",
+      "sizes": "390x844",
+      "type": "image/webp",
+      "form_factor": "narrow",
+      "label": "Belanja es kristal dan air minum dari ponsel"
+    },
+    {
+      "src": "/screenshots/wide.webp",
+      "sizes": "1280x800",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Katalog dan pemesanan Ardines Group di layar lebar"
     }
   ]
 }

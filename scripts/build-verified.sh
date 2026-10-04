@@ -18,6 +18,15 @@ if [[ ! -x "${vinext}" ]]; then
   exit 69
 fi
 
+tsc="${SITES_PROJECT_ROOT}/node_modules/.bin/tsc"
+if [[ -x "${tsc}" ]]; then
+  echo "Running typecheck (tsc --noEmit)..."
+  "${tsc}" --noEmit
+else
+  echo "tsc is unavailable. Run npm run install:ci before building." >&2
+  exit 69
+fi
+
 echo "Running bounded vinext build..."
 timeout \
   --signal=TERM \

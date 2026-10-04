@@ -28,12 +28,15 @@ export function shippingFor(fulfillment: string): number {
   return fulfillment === "delivery" ? 5000 : 0;
 }
 
-/** Transisi status yang diizinkan dari status saat ini. */
+/** Transisi status yang diizinkan dari status saat ini.
+ *  Alur ringkas: new -> confirmed -> (delivering, hanya pengantaran) -> completed.
+ *  "preparing" dan "ready" tidak lagi dibuat, tetapi pesanan lama yang masih
+ *  berstatus itu melanjutkan ke langkah yang sama dengan "confirmed". */
 export function allowedTransitions(status: string, fulfillment: string): string[] {
   switch (status) {
     case "new": return ["confirmed", "cancelled"];
-    case "confirmed": return ["preparing", "cancelled"];
-    case "preparing": return ["ready", "cancelled"];
+    case "confirmed":
+    case "preparing":
     case "ready": return [fulfillment === "delivery" ? "delivering" : "completed", "cancelled"];
     case "delivering": return ["completed", "cancelled"];
     default: return [];

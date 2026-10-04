@@ -21,13 +21,90 @@ type RewardRow = {
 };
 
 type RedemptionRow = {
-  id: string; user_id: string; reward_id: string; reward_name: string;
+  id: string; user_id: string; reward_id: string; reward_name: string; order_id: string | null;
   points_cost: number; status: string; created_at: string;
 };
 
 const SESSION_COOKIE = "depot_session";
-const ADMIN_EMAIL = "admin@segardepot.local";
-const ADMIN_PASSWORD = "Admin123!";
+
+/* ===== Kredensial admin =====
+   PRODUKSI: isi dua Workers Secrets — ADMIN_EMAIL dan ADMIN_PASSWORD_HASH.
+   Buat hash-nya dengan: node scripts/hash-password.mjs "password-baru"
+   Begitu keduanya terisi, MODE DEMO mati otomatis: akun dummy admin/member
+   berhenti berfungsi dan kredensialnya tidak lagi ditampilkan di layar login.
+
+   MODE DEMO (selama secret belum diisi): akun dummy di bawah tetap aktif agar
+   fungsi aplikasi bisa dicek. Jangan buka domain publik dalam mode ini. */
+const DEMO_ADMIN_EMAIL = "admin@ardines.local";
+const DEMO_ADMIN_PASSWORD = "Admin123!";
+
+type Secrets = { adminEmail: string; adminHash: string };
+
+function secrets(): Secrets {
+  const vars = env as unknown as Record<string, string | undefined>;
+  return {
+    adminEmail: (vars.ADMIN_EMAIL ?? "").trim().toLowerCase(),
+    adminHash: (vars.ADMIN_PASSWORD_HASH ?? "").trim(),
+  };
+}
+
+/** Mode demo aktif selama ADMIN_EMAIL + ADMIN_PASSWORD_HASH belum diisi. */
+function demoMode(): boolean {
+  const s = secrets();
+  return !(s.adminEmail && s.adminHash);
+}
+
+/** Perbandingan waktu-tetap agar durasi respons tidak membocorkan isi kredensial. */
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  let diff = left.length ^ right.length;
+  const max = Math.max(left.length, right.length);
+  for (let i = 0; i < max; i++) diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  return diff === 0;
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Verifikasi password terhadap hash "pbkdf2$<iterasi>$<salt-b64>$<hash-b64>". */
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const parts = stored.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
+  const iterations = Number(parts[1]);
+  if (!Number.isInteger(iterations) || iterations < 1) return false;
+  let salt: Uint8Array;
+  try { salt = base64ToBytes(parts[2]); } catch { return false; }
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: salt as unknown as BufferSource, iterations, hash: "SHA-256" }, key, 256
+  );
+  return timingSafeEqual(bytesToBase64(new Uint8Array(bits)), parts[3]);
+}
+
+/** Cek kredensial admin. Mode demo → bandingkan konstanta; produksi → PBKDF2. */
+async function adminCredentialsValid(email: string, password: string): Promise<boolean> {
+  const s = secrets();
+  if (demoMode()) {
+    return timingSafeEqual(email.toLowerCase(), DEMO_ADMIN_EMAIL) && timingSafeEqual(password, DEMO_ADMIN_PASSWORD);
+  }
+  if (!timingSafeEqual(email.toLowerCase(), s.adminEmail)) {
+    await verifyPassword(password, s.adminHash); // samakan biaya kerja
+    return false;
+  }
+  return verifyPassword(password, s.adminHash);
+}
 
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -88,6 +165,12 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
   `CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)`,
   `CREATE INDEX IF NOT EXISTS idx_redemptions_user ON redemptions(user_id)`,
+  // Pembatas laju lintas isolate. Map di memori hanya berlaku per-isolate Worker,
+  // jadi hitungan percobaan harus disimpan di D1 agar benar-benar mengikat.
+  `CREATE TABLE IF NOT EXISTS auth_attempts (
+    scope TEXT NOT NULL, ip TEXT NOT NULL, count INTEGER NOT NULL,
+    window_start INTEGER NOT NULL, PRIMARY KEY (scope, ip)
+  )`,
 ];
 
 const seedProducts = [
@@ -105,10 +188,20 @@ function db() {
   return env.DB;
 }
 
-let ready = false;
+/* Dimemoisasi sebagai promise, bukan boolean: dua permintaan bersamaan di satu
+   isolate harus menunggu migrasi yang sama, bukan menjalankannya dua kali.
+   Direset saat gagal agar permintaan berikutnya bisa mencoba lagi. */
+let readyPromise: Promise<void> | null = null;
 
-async function ensureReady() {
-  if (ready) return;
+function ensureReady(): Promise<void> {
+  readyPromise ??= runMigrations().catch((error) => {
+    readyPromise = null;
+    throw error;
+  });
+  return readyPromise;
+}
+
+async function runMigrations() {
   await db().batch(schemaStatements.map((sql) => db().prepare(sql)));
   const cols = await db().prepare("PRAGMA table_info(orders)").all<{ name: string }>();
   if (!cols.results.some((c) => c.name === "payment_method")) {
@@ -120,16 +213,23 @@ async function ensureReady() {
   }
   const count = await db().prepare("SELECT COUNT(*) AS total FROM products").first<{ total: number }>();
   if (!count?.total) {
+    // OR IGNORE: dua permintaan pertama setelah deploy bisa sama-sama membaca
+    // COUNT = 0; tanpa ini yang kedua melanggar UNIQUE(sku) dan berakhir 500.
     await db().batch(seedProducts.map((p) => db().prepare(
-      "INSERT INTO products (id, sku, name, category, unit, price, stock, reserved, min_stock, accent) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)"
+      "INSERT OR IGNORE INTO products (id, sku, name, category, unit, price, stock, reserved, min_stock, accent) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)"
     ).bind(...p)));
   }
   await db().batch([
     db().prepare("INSERT OR IGNORE INTO users (id, name, email, role, points) VALUES (?, ?, ?, ?, ?)")
-      .bind("usr-admin", "Admin Depot", ADMIN_EMAIL, "admin", 0),
+      .bind("usr-admin", "Admin Depot", secrets().adminEmail || DEMO_ADMIN_EMAIL, "admin", 0),
     db().prepare("INSERT OR IGNORE INTO users (id, name, email, role, points) VALUES (?, ?, ?, ?, ?)")
       .bind("usr-member", "Nadia Pelanggan", "member.demo@gmail.com", "member", 120),
   ]);
+  // Selaraskan email admin bila ADMIN_EMAIL (atau email demo) berubah setelah
+  // baris usr-admin terlanjur dibuat — INSERT OR IGNORE di atas tidak memperbarui.
+  const adminEmail = secrets().adminEmail || DEMO_ADMIN_EMAIL;
+  await db().prepare("UPDATE users SET email = ? WHERE id = 'usr-admin' AND email != ?")
+    .bind(adminEmail, adminEmail).run();
   await ensureSettings();
   // Migrasi: kolom product_id di rewards (reward terkait produk persediaan)
   const rewardCols = await db().prepare("PRAGMA table_info(rewards)").all<{ name: string }>();
@@ -145,85 +245,27 @@ async function ensureReady() {
   if (!redCols.results.some((c) => c.name === "order_id")) {
     await db().prepare("ALTER TABLE redemptions ADD COLUMN order_id TEXT").run();
   }
-  ready = true;
+  // Buang jendela pembatas laju yang sudah lewat sehari agar tabel tidak menumpuk.
+  await db().prepare("DELETE FROM auth_attempts WHERE window_start < ?").bind(Date.now() - 86_400_000).run();
 }
 
 function json(data: unknown, init?: ResponseInit) { return Response.json(data, init); }
 function randomId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 
-/* Settings: ongkir + WhatsApp. Default ongkir Rp5.000, WA nonaktif sampai token diisi. */
+/* Settings: ongkir. Default Rp5.000. */
 async function getSettings() {
   const rows = await db().prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
   const map: Record<string, string> = {};
   for (const r of rows.results) map[r.key] = r.value;
   return {
     deliveryFee: Math.max(0, Math.trunc(Number(map.delivery_fee ?? 5000))),
-    waEnabled: map.wa_enabled === "1",
-    waTarget: map.wa_target ?? "",
-    waGateway: map.wa_gateway ?? "wablas",
-    waHost: map.wa_host ?? "solo.wablas.com",
-    waTokenSet: Boolean(map.wa_token),
-    waSecretSet: Boolean(map.wa_secret),
+    // Klien memakai ini untuk menampilkan/menyembunyikan kredensial dummy.
+    demoMode: demoMode(),
   };
 }
 
 async function ensureSettings() {
   await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('delivery_fee', '5000')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_enabled', '0')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_target', '')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_gateway', 'wablas')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_host', 'solo.wablas.com')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_token', '')").run();
-  await db().prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('wa_secret', '')").run();
-}
-
-/* Normalisasi nomor HP → format internasional (08xx → 628xx). */
-function toInternationalPhone(raw: string): string {
-  let p = raw.replace(/[^\d]/g, "");
-  if (p.startsWith("0")) p = "62" + p.slice(1);
-  else if (p.startsWith("+")) p = p.slice(1);
-  return p;
-}
-
-/* Kirim notifikasi WhatsApp via gateway (Wablas / Fonnte).
-   Gagal tidak pernah melempar — order tetap diproses. */
-async function notifyWhatsApp(payload: { orderNo: string; customerName: string; phone: string; fulfillment: string; paymentLabel: string; items: string; total: number; address: string }) {
-  try {
-    const rows = await db().prepare("SELECT key, value FROM settings WHERE key IN ('wa_enabled', 'wa_target', 'wa_gateway', 'wa_host', 'wa_token', 'wa_secret')").all<{ key: string; value: string }>();
-    const map: Record<string, string> = {};
-    for (const r of rows.results) map[r.key] = r.value;
-    if (map.wa_enabled !== "1" || !map.wa_token || !map.wa_target) return;
-    const lines = [
-      "🛒 *PESANAN BARU MASUK*",
-      "━━━━━━━━━━━━━━━━",
-      `No. Order : ${payload.orderNo}`,
-      `Pelanggan : ${payload.customerName}`,
-      `WhatsApp  : ${payload.phone}`,
-      `Layanan   : ${payload.fulfillment === "delivery" ? "🚚 Diantar" : "🏪 Ambil sendiri"}`,
-      `Pembayaran: ${payload.paymentLabel}`,
-      "━━━━━━━━━━━━━━━━",
-      ...payload.items,
-      "━━━━━━━━━━━━━━━━",
-      `*Total: ${new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(payload.total)}*`,
-    ];
-    if (payload.fulfillment === "delivery" && payload.address) {
-      lines.push(`📍 Alamat: ${payload.address}`);
-    }
-    const message = lines.join("\n");
-    const target = toInternationalPhone(map.wa_target);
-    const gateway = map.wa_gateway === "fonnte" ? "fonnte" : "wablas";
-    const headers: Record<string, string> = { "content-type": gateway === "fonnte" ? "application/json" : "application/x-www-form-urlencoded", authorization: map.wa_token };
-    // Wablas: bila akun mengaktifkan Secret Key, IP tidak perlu di-whitelist
-    if (gateway === "wablas" && map.wa_secret) headers["secret"] = map.wa_secret;
-    const body = gateway === "fonnte"
-      ? JSON.stringify({ target, message })
-      : new URLSearchParams({ phone: target, message }).toString();
-    const endpoint = gateway === "fonnte" ? "https://api.fonnte.com/send" : `https://${map.wa_host || "solo.wablas.com"}/api/send-message`;
-    const res = await fetch(endpoint, { method: "POST", headers, body });
-    if (!res.ok) console.error("[wa] gateway", res.status, await res.text());
-  } catch (error) {
-    console.error("[wa] gagal kirim:", error instanceof Error ? error.message : error);
-  }
 }
 
 function todayOrderNo() {
@@ -294,26 +336,44 @@ async function grantPointsIfEligible(orderId: string) {
   ]);
 }
 
-const trackAttempts = new Map<string, { count: number; resetAt: number }>();
-
-function trackThrottled(ip: string): boolean {
-  const now = Date.now();
-  if (trackAttempts.size > 2000) {
-    for (const [key, value] of trackAttempts) {
-      if (value.resetAt < now) trackAttempts.delete(key);
-    }
-  }
-  const entry = trackAttempts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    trackAttempts.set(ip, { count: 1, resetAt: now + 60_000 });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > 10;
-}
-
 function clientIp(request: Request): string {
   return request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+}
+
+/* Pembatas laju berbasis D1 — satu upsert atomik dengan RETURNING, sehingga
+   hitungannya benar walau permintaan tersebar ke banyak isolate Worker.
+   Jendela bergulir: hitungan direset saat window_start sudah lewat batas. */
+async function rateLimited(scope: string, ip: string, limit: number, windowMs: number): Promise<boolean> {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const row = await db().prepare(
+    `INSERT INTO auth_attempts (scope, ip, count, window_start) VALUES (?, ?, 1, ?)
+     ON CONFLICT(scope, ip) DO UPDATE SET
+       count = CASE WHEN auth_attempts.window_start < ? THEN 1 ELSE auth_attempts.count + 1 END,
+       window_start = CASE WHEN auth_attempts.window_start < ? THEN ? ELSE auth_attempts.window_start END
+     RETURNING count`
+  ).bind(scope, ip, now, cutoff, cutoff, now).first<{ count: number }>();
+  return (row?.count ?? 1) > limit;
+}
+
+/** Nolkan penghitung setelah login berhasil, agar salah ketik yang tersebar
+    sepanjang hari tidak menumpuk sampai mengunci admin yang sah. */
+async function clearRateLimit(scope: string, ip: string) {
+  await db().prepare("DELETE FROM auth_attempts WHERE scope = ? AND ip = ?").bind(scope, ip).run();
+}
+
+/* Tolak permintaan lintas-origin. Sec-Fetch-Site saja tidak cukup: header itu
+   opsional, jadi Origin diperiksa sebagai lapis kedua dan permintaan yang tidak
+   membawa keduanya ditolak (bukan berasal dari browser). */
+function crossOriginBlocked(request: Request): boolean {
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return true;
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try { return new URL(origin).origin !== new URL(request.url).origin; }
+    catch { return true; }
+  }
+  return !site;
 }
 
 export async function GET(request: Request) {
@@ -330,7 +390,9 @@ export async function GET(request: Request) {
     }
     if (view === "me") return json({ user });
     if (view === "track") {
-      if (trackThrottled(clientIp(request))) return json({ error: "Terlalu banyak percobaan. Coba lagi sebentar lagi." }, { status: 429 });
+      if (await rateLimited("track", clientIp(request), 10, 60_000)) {
+        return json({ error: "Terlalu banyak percobaan. Coba lagi sebentar lagi." }, { status: 429 });
+      }
       const orderNo = (url.searchParams.get("orderNo") ?? "").trim().toUpperCase();
       const phone = (url.searchParams.get("phone") ?? "").replace(/\D/g, "");
       if (phone.length < 6) return json({ error: "Masukkan minimal 6 digit terakhir nomor WhatsApp." }, { status: 422 });
@@ -378,19 +440,33 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await ensureReady();
-    if (request.headers.get("sec-fetch-site") === "cross-site") {
+    if (crossOriginBlocked(request)) {
       return json({ error: "Permintaan tidak diizinkan." }, { status: 403 });
     }
     const body = await request.json() as Record<string, unknown>;
     const action = String(body.action ?? "");
 
     if (action === "login_admin") {
-      if (String(body.email).toLowerCase() !== ADMIN_EMAIL || String(body.password) !== ADMIN_PASSWORD) {
+      const ip = clientIp(request);
+      if (await rateLimited("login_admin", ip, 8, 15 * 60_000)) {
+        return json({ error: "Terlalu banyak percobaan masuk. Coba lagi dalam 15 menit." }, { status: 429 });
+      }
+      const valid = await adminCredentialsValid(String(body.email ?? ""), String(body.password ?? ""));
+      if (!valid) {
+        console.warn("[auth] login admin gagal dari", ip);
         return json({ error: "Email atau password admin tidak sesuai." }, { status: 401 });
       }
+      await clearRateLimit("login_admin", ip);
       return createSession(request, "usr-admin");
     }
-    if (action === "login_member_demo") return createSession(request, "usr-member");
+    // Login member tanpa kredensial — hanya boleh hidup selama mode demo.
+    if (action === "login_member_demo") {
+      if (!demoMode()) return json({ error: "Login demo dinonaktifkan." }, { status: 403 });
+      if (await rateLimited("login_member", clientIp(request), 20, 15 * 60_000)) {
+        return json({ error: "Terlalu banyak percobaan masuk. Coba lagi dalam 15 menit." }, { status: 429 });
+      }
+      return createSession(request, "usr-member");
+    }
     if (action === "logout") {
       const token = readCookie(request, SESSION_COOKIE);
       if (token) await db().prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
@@ -399,7 +475,12 @@ export async function POST(request: Request) {
       }});
     }
 
-    if (action === "create_order") return createOrder(request, body);
+    if (action === "create_order") {
+      // Tag "offline" (kasir) hanya boleh ditetapkan admin — pengunjung anonim
+      // tidak boleh menyisipkan pesanan yang tampak sudah dilayani di konter.
+      const caller = await currentUser(request);
+      return createOrder(request, body, caller?.role === "admin");
+    }
 
     /* Redeem poin — khusus member: wajib form pemesanan, membuat order tipe "redeem"
        yang masuk antrian pesanan admin (tag khusus di tab Pesanan). */
@@ -428,26 +509,49 @@ export async function POST(request: Request) {
       const now = new Date().toISOString();
       const orderId = randomId("ord"); const orderNo = await nextOrderNo();
       const redemptionId = randomId("rdm");
-      await db().batch([
-        db().prepare("UPDATE users SET points = points - ? WHERE id = ? AND points >= ?").bind(reward.points_cost, user.id, reward.points_cost),
-        db().prepare(`INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, order_type, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'paid', 'redeem', 0, 0, 'redeem', ?)`)
-          .bind(orderId, orderNo, user.id, customerName, phone, address, fulfillment, now),
-        db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, 'item', 1, ?, ?)")
-          .bind(orderId, productId, reward.name, productPrice, productPrice),
-        db().prepare("INSERT INTO redemptions (id, user_id, reward_id, reward_name, points_cost, status, order_id, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)")
-          .bind(redemptionId, user.id, reward.id, reward.name, reward.points_cost, orderId, now),
-        db().prepare("INSERT INTO loyalty_ledger (id, user_id, points, movement_type, order_id, created_at) VALUES (?, ?, ?, 'redeem', ?, ?)")
-          .bind(randomId("loy"), user.id, -reward.points_cost, orderId, now),
-        ...(reward.stock !== null ? [db().prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0").bind(reward.id)] : []),
-      ]);
-      // Notifikasi WhatsApp admin untuk order hasil tukar poin
-      void notifyWhatsApp({
-        orderNo, customerName: user.name, phone, fulfillment, address,
-        paymentLabel: "🎁 Tukar poin",
-        items: [`• ${reward.name} (${reward.points_cost} poin)`],
-        total: 0,
-      });
+
+      /* Potong poin sebagai pernyataan tunggal berpenjaga, lalu verifikasi.
+         Di dalam batch, 0 baris terpengaruh bukan galat — redemption akan tetap
+         commit walau poin tidak terpotong, dan member dapat hadiah gratis. */
+      const spend = await db()
+        .prepare("UPDATE users SET points = points - ? WHERE id = ? AND points >= ?")
+        .bind(reward.points_cost, user.id, reward.points_cost).run();
+      if ((spend.meta?.changes ?? 0) !== 1) {
+        return json({ error: "Poin tidak mencukupi." }, { status: 409 });
+      }
+
+      /* Stok reward juga diklaim terpisah dengan pola yang sama. */
+      if (reward.stock !== null) {
+        const claim = await db()
+          .prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0").bind(reward.id).run();
+        if ((claim.meta?.changes ?? 0) !== 1) {
+          await db().prepare("UPDATE users SET points = points + ? WHERE id = ?")
+            .bind(reward.points_cost, user.id).run(); // kembalikan poin yang sudah terpotong
+          return json({ error: "Stok penawaran habis." }, { status: 409 });
+        }
+      }
+
+      try {
+        await db().batch([
+          db().prepare(`INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, order_type, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'paid', 'redeem', 0, 0, 'redeem', ?)`)
+            .bind(orderId, orderNo, user.id, customerName, phone, address, fulfillment, now),
+          db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, 'item', 1, ?, ?)")
+            .bind(orderId, productId, reward.name, productPrice, productPrice),
+          db().prepare("INSERT INTO redemptions (id, user_id, reward_id, reward_name, points_cost, status, order_id, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)")
+            .bind(redemptionId, user.id, reward.id, reward.name, reward.points_cost, orderId, now),
+          db().prepare("INSERT INTO loyalty_ledger (id, user_id, points, movement_type, order_id, created_at) VALUES (?, ?, ?, 'redeem', ?, ?)")
+            .bind(randomId("loy"), user.id, -reward.points_cost, orderId, now),
+        ]);
+      } catch (error) {
+        // Poin & stok reward sudah terpotong di luar batch — kembalikan keduanya
+        // agar member tidak kehilangan poin untuk order yang tidak pernah jadi.
+        await db().batch([
+          db().prepare("UPDATE users SET points = points + ? WHERE id = ?").bind(reward.points_cost, user.id),
+          ...(reward.stock !== null ? [db().prepare("UPDATE rewards SET stock = stock + 1 WHERE id = ?").bind(reward.id)] : []),
+        ]).catch((e) => console.error("[poin] gagal mengembalikan poin:", e));
+        throw error;
+      }
       return json({ ok: true, orderNo, redemptionId });
     }
 
@@ -493,35 +597,8 @@ export async function POST(request: Request) {
       if (deliveryFee !== null && (deliveryFee < 0 || !Number.isFinite(deliveryFee))) return json({ error: "Biaya ongkir tidak valid." }, { status: 422 });
       const ops = [];
       if (deliveryFee !== null) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('delivery_fee', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(deliveryFee)));
-      if (body.waTarget !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_target', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waTarget).trim()));
-      if (body.waGateway !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_gateway', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waGateway) === "fonnte" ? "fonnte" : "wablas"));
-      if (body.waHost !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_host', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waHost).trim().replace(/^https?:\/\//, "").replace(/\/$/, "")));
-      if (body.waEnabled !== undefined) ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(body.waEnabled ? "1" : "0"));
-      // Token: hanya ditimpa bila diisi (kosong = pertahankan token lama)
-      if (body.waToken !== undefined && String(body.waToken).trim() !== "") ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_token', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waToken).trim()));
-      // Secret key Wablas (opsional — membuat IP tidak perlu di-whitelist)
-      if (body.waSecret !== undefined && String(body.waSecret).trim() !== "") ops.push(db().prepare("INSERT INTO settings (key, value) VALUES ('wa_secret', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(body.waSecret).trim()));
       if (ops.length) await db().batch(ops);
       return json({ ok: true, settings: await getSettings() });
-    }
-    if (action === "test_whatsapp") {
-      // Kirim pesan uji ke nomor admin — butuh token terisi
-      const rows = await db().prepare("SELECT key, value FROM settings WHERE key IN ('wa_target', 'wa_gateway', 'wa_host', 'wa_token', 'wa_secret')").all<{ key: string; value: string }>();
-      const map: Record<string, string> = {};
-      for (const r of rows.results) map[r.key] = r.value;
-      if (!map.wa_token) return json({ error: "Token WhatsApp belum diisi. Isi token gateway dahulu." }, { status: 422 });
-      if (!map.wa_target) return json({ error: "Nomor tujuan WhatsApp belum diisi." }, { status: 422 });
-      const target = toInternationalPhone(map.wa_target);
-      const gateway = map.wa_gateway === "fonnte" ? "fonnte" : "wablas";
-      const message = "✅ *Tes Notifikasi Ardines*\n\nKoneksi WhatsApp gateway berhasil. Anda akan menerima notifikasi setiap ada pesanan baru.";
-      const headers: Record<string, string> = { "content-type": gateway === "fonnte" ? "application/json" : "application/x-www-form-urlencoded", authorization: map.wa_token };
-      if (gateway === "wablas" && map.wa_secret) headers["secret"] = map.wa_secret;
-      const body = gateway === "fonnte" ? JSON.stringify({ target, message }) : new URLSearchParams({ phone: target, message }).toString();
-      const endpoint = gateway === "fonnte" ? "https://api.fonnte.com/send" : `https://${map.wa_host || "solo.wablas.com"}/api/send-message`;
-      const res = await fetch(endpoint, { method: "POST", headers, body });
-      const text = await res.text();
-      if (!res.ok) return json({ error: `Gateway menolak (${res.status}): ${text.slice(0, 200)}` }, { status: 502 });
-      return json({ ok: true, gateway, host: map.wa_host || "solo.wablas.com", target, response: text.slice(0, 200) });
     }
     if (action === "create_reward") {
       const name = String(body.name ?? "").trim();
@@ -605,13 +682,14 @@ export async function POST(request: Request) {
   }
 }
 
-async function createOrder(request: Request, body: Record<string, unknown>) {
+async function createOrder(request: Request, body: Record<string, unknown>, isAdmin: boolean) {
   const customerName = String(body.customerName ?? "").trim();
   const phone = String(body.phone ?? "").trim();
   const fulfillment = body.fulfillment === "pickup" ? "pickup" : "delivery";
   const address = String(body.address ?? "").trim();
   const paymentMethod = normalizePaymentMethod(body.paymentMethod);
-  const orderType = body.order_type === "offline" ? "offline" : "regular"; // online (default) | offline (kasir admin) | redeem (di handle redeem_reward)
+  // online (default) | offline (kasir admin) | redeem (ditangani redeem_reward)
+  const orderType = isAdmin && body.order_type === "offline" ? "offline" : "regular";
   const inputItems = Array.isArray(body.items) ? body.items as Array<{ productId?: string; qty?: number }> : [];
   if (customerName.length < 2 || phone.replace(/\D/g, "").length < 9) return json({ error: "Nama dan nomor WhatsApp wajib valid." }, { status: 422 });
   if (fulfillment === "delivery" && address.length < 8) return json({ error: "Alamat pengiriman belum lengkap." }, { status: 422 });
@@ -632,6 +710,23 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
   const total = subtotal + shipping;
   const user = await currentUser(request);
   const orderId = randomId("ord"); const orderNo = await nextOrderNo(); const now = new Date().toISOString();
+
+  /* Klaim reservasi lebih dulu, satu per satu, dan periksa meta.changes.
+     Menaruh UPDATE berpenjaga di dalam batch tidak aman: D1 memutar balik saat
+     pernyataan GAGAL, bukan saat ia tidak mengenai baris mana pun — order akan
+     tetap commit tanpa reservasi dan stok bisa terjual berlebih. */
+  const claimed: Array<{ productId: string; qty: number }> = [];
+  for (const { product, qty } of selected) {
+    const claim = await db()
+      .prepare("UPDATE products SET reserved = reserved + ? WHERE id = ? AND stock - reserved >= ?")
+      .bind(qty, product.id, qty).run();
+    if ((claim.meta?.changes ?? 0) !== 1) {
+      await releaseClaims(claimed);
+      return json({ error: `Stok ${product.name} tidak mencukupi.` }, { status: 409 });
+    }
+    claimed.push({ productId: product.id, qty });
+  }
+
   const statements = [db().prepare(
     `INSERT INTO orders (id, order_no, user_id, customer_name, phone, address, fulfillment, status, payment_status, payment_method, total, points_earned, order_type, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'new', 'unpaid', ?, ?, 0, ?, ?)`
@@ -640,20 +735,29 @@ async function createOrder(request: Request, body: Record<string, unknown>) {
     statements.push(
       db().prepare("INSERT INTO order_items (order_id, product_id, product_name, unit, qty, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .bind(orderId, product.id, product.name, product.unit, qty, product.price, product.price * qty),
-      db().prepare("UPDATE products SET reserved = reserved + ? WHERE id = ? AND stock - reserved >= ?").bind(qty, product.id, qty),
       db().prepare("INSERT INTO inventory_movements (id, product_id, qty, movement_type, reference_id, reason, created_at) VALUES (?, ?, ?, 'reserve', ?, 'Reservasi order baru', ?)")
         .bind(randomId("mov"), product.id, qty, orderId, now),
     );
   }
-  await db().batch(statements);
-  // Notifikasi WhatsApp admin (fire-and-forget — kegagalan tidak membatalkan order)
-  void notifyWhatsApp({
-    orderNo, customerName, phone, fulfillment, address,
-    paymentLabel: { cod: "💵 COD", transfer: "🏦 Transfer", qris: "📱 QRIS" }[paymentMethod] ?? paymentMethod,
-    items: selected.map(({ product, qty }) => `• ${qty}× ${product.name}`),
-    total,
-  });
+  try {
+    await db().batch(statements); // hanya INSERT — aman di dalam satu batch
+  } catch (error) {
+    await releaseClaims(claimed); // order gagal tersimpan: jangan tinggalkan reservasi menggantung
+    throw error;
+  }
+
   return json({ ok: true, orderNo, orderId, total }, { status: 201 });
+}
+
+/** Kembalikan reservasi yang sudah terlanjur diklaim saat checkout gagal di tengah jalan. */
+async function releaseClaims(claimed: Array<{ productId: string; qty: number }>) {
+  if (!claimed.length) return;
+  try {
+    await db().batch(claimed.map(({ productId, qty }) =>
+      db().prepare("UPDATE products SET reserved = MAX(0, reserved - ?) WHERE id = ?").bind(qty, productId)));
+  } catch (error) {
+    console.error("[stok] gagal melepas reservasi:", error);
+  }
 }
 
 function productFields(body: Record<string, unknown>) {
@@ -777,7 +881,12 @@ async function updateOrderDetails(body: Record<string, unknown>) {
   const order = await db().prepare("SELECT * FROM orders WHERE id = ?").bind(orderId).first<OrderRow>();
   if (!order) return json({ error: "Order tidak ditemukan." }, { status: 404 });
   if (order.order_type === "redeem") return json({ error: "Order tukar poin tidak bisa diedit." }, { status: 409 });
-  if (["completed", "cancelled"].includes(order.status)) return json({ error: "Order selesai/dibatalkan tidak bisa diedit." }, { status: 409 });
+  /* Hanya order yang reservasinya masih hidup. Sejak status 'preparing', stok
+     fisik sudah dipotong dan reservasi dilepas (lihat updateOrder), sehingga
+     penyesuaian reserved di bawah akan menggelembungkan angka selamanya. */
+  if (!["new", "confirmed"].includes(order.status)) {
+    return json({ error: "Pesanan yang sudah disiapkan tidak bisa diedit. Batalkan lalu buat pesanan baru." }, { status: 409 });
+  }
   const customerName = String(body.customerName ?? "").trim();
   const phone = String(body.phone ?? "").trim();
   const fulfillment = body.fulfillment === "pickup" ? "pickup" : "delivery";

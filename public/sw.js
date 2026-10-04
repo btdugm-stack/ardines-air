@@ -1,12 +1,15 @@
-/* Service Worker — Ardines Web (Depot Air Mineral)
+/* Service Worker — Ardines Group (Distributor Es Kristal & Depot Air Minum)
  * Strategi:
  *  - Precache shell: halaman, manifest, ikon, dan aset statis.
  *  - Navigation requests: network-first, fallback ke cache (offline).
  *  - Aset statis (assets/): cache-first (nama hashed = immutable).
  *  - API (/api/...): network-only (data order/stok harus real-time).
- * Versi cache di-bump setiap deploy agar aset baru tidak basi.
  */
-const CACHE = 'ardines-v1';
+/* Versi cache — NAIKKAN setiap deploy agar aset lama tersapu di activate(). */
+const CACHE = 'ardines-v2';
+/* Hanya shell dan ikon. Gambar hero sengaja TIDAK di sini: antarmuka
+   memintanya lewat /_vinext/image yang sudah diperkecil, jadi menyimpan
+   berkas mentah hanya menambah bobot pemasangan tanpa dipakai. */
 const PRECACHE = [
   '/',
   '/manifest.webmanifest',
@@ -15,7 +18,6 @@ const PRECACHE = [
   '/icon-192-maskable.png',
   '/icon-512-maskable.png',
   '/favicon.svg',
-  '/og.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -42,13 +44,20 @@ self.addEventListener('fetch', (event) => {
   // API: network-only
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigation (dokumen): network-first, fallback cache
+  // Navigation (dokumen): network-first, fallback cache.
+  // Hanya respons sukses yang boleh menjadi shell offline — tanpa cek ini satu
+  // halaman 500 saat deploy akan tersimpan dan disajikan terus sampai ada
+  // navigasi online yang berhasil. Respons hasil redirect ditolak cache.put().
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('/', copy));
+          if (response.ok && !response.redirected) {
+            const copy = response.clone();
+            caches.open(CACHE)
+              .then((cache) => cache.put('/', copy))
+              .catch((err) => console.warn('SW cache shell gagal:', err));
+          }
           return response;
         })
         .catch(() => caches.match('/').then((r) => r || caches.match(request)))
@@ -62,9 +71,11 @@ self.addEventListener('fetch', (event) => {
       (cached) =>
         cached ||
         fetch(request).then((response) => {
-          if (response.ok) {
+          if (response.ok && !response.redirected) {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
+            caches.open(CACHE)
+              .then((cache) => cache.put(request, copy))
+              .catch((err) => console.warn('SW cache aset gagal:', err));
           }
           return response;
         })

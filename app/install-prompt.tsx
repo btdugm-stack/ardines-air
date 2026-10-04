@@ -22,10 +22,16 @@ export default function InstallPrompt() {
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
     const dismissedKey = "ardines_install_dismissed";
 
+    // Penundaan 7 hari setelah pengguna menutup banner. Dipakai kedua jalur —
+    // timer maupun beforeinstallprompt — agar penolakan benar-benar dihormati.
+    const recentlyDismissed = () => {
+      const last = Number(localStorage.getItem(dismissedKey) ?? 0);
+      return Date.now() - last < 7 * 24 * 60 * 60 * 1000;
+    };
+
     const maybeShow = () => {
       if (isStandalone()) { setInstalled(true); return; }
-      const last = Number(localStorage.getItem(dismissedKey) ?? 0);
-      if (Date.now() - last < 7 * 24 * 60 * 60 * 1000) return;
+      if (recentlyDismissed()) return;
       const t = setTimeout(() => setShow(true), 3500);
       return () => clearTimeout(t);
     };
@@ -33,6 +39,7 @@ export default function InstallPrompt() {
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as Event & { prompt?: () => Promise<void>; userChoice?: Promise<{ outcome: string }> });
+      if (isStandalone() || recentlyDismissed()) return;
       setShow(true);
     };
 
@@ -75,7 +82,7 @@ export default function InstallPrompt() {
         <div className="install-text">
           <b>{isIOS ? "Pasang Ardines di layar utama" : "Install aplikasi Ardines"}</b>
           <small>{isIOS
-            ? "Ketuk ikon Bagikan (⬆️) di Safari, lalu pilih “Tambahkan ke Layar Utama”."
+            ? "Ketuk tombol Bagikan di Safari, lalu pilih “Tambahkan ke Layar Utama”."
             : "Akses lebih cepat & buka layar penuh seperti aplikasi."}</small>
         </div>
         <div className="install-actions">
