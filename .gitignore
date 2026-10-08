@@ -43,3 +43,9 @@ next-env.d.ts
 
 # cloudflare local secrets
 .dev.vars
+
+# alat lokal & artefak audit (bukan bagian aplikasi)
+/kerja/
+/design-audit/
+/.claude/
+tsconfig.tsbuildinfo

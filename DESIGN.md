@@ -42,4 +42,6 @@ Plus Jakarta Sans untuk seluruh teks: judul, isi, formulir, dan tombol. Keputusa
 
 `ENERGY 1 / RHYTHM 2 / MOTION 1`
 
+Pengecualian (keputusan pemilik, 8 Oktober 2026): halaman pilih-peran dan hero toko memakai lapisan premium, `ENERGY 2 / MOTION 2`. Di sana berlaku bingkai ganda pada kartu dan gambar, tombol pil dengan ikon di lingkarannya sendiri, lencana kecil di atas judul, dan animasi masuk satu kali. Katalog, checkout, lacak, member, dan admin tetap pada dial di atas.
+
 Diturunkan dari "tenang dan fungsional" dan "seperti marketplace". ENERGY dan MOTION dari jawaban pemilik; RHYTHM 2 adalah tafsiran, belum dikonfirmasi.

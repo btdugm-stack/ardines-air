@@ -6346,6 +6346,188 @@ h1, h2, h3,
   color: var(--muted);
 }
 
+/* ============================================================
+   LANDING DAN HERO TOKO: lapisan premium (DESIGN.md, ENERGY 2)
+   Hanya dua bagian ini. Katalog, checkout, dan admin tetap tenang dan padat.
+   - Bingkai ganda: cangkang luar bertint + inti di dalamnya, sudut konsentris.
+   - Tombol pil dengan ikon di lingkarannya sendiri.
+   - Gerak: satu kali saat tampil, kurva pegas; hanya transform dan opacity.
+   ============================================================ */
+:root {
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --shell: rgba(7, 48, 58, 0.05);
+  --shell-ring: rgba(7, 48, 58, 0.07);
+  --core-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.7);
+  --ambient: 0 24px 60px -24px rgba(7, 48, 58, 0.22);
+}
+
+:root[data-theme="dark"] {
+  --shell: rgba(255, 255, 255, 0.05);
+  --shell-ring: rgba(255, 255, 255, 0.1);
+  --core-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.12);
+  --ambient: 0 24px 60px -24px rgba(0, 0, 0, 0.7);
+}
+
+@keyframes naikHalus {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.landing > *,
+.hero-copy > *,
+.hero-visual {
+  animation: naikHalus 0.8s var(--ease-fluid) both;
+}
+
+.landing > :nth-child(2), .hero-copy > :nth-child(2) { animation-delay: 0.08s; }
+.landing > :nth-child(3), .hero-copy > :nth-child(3) { animation-delay: 0.16s; }
+.landing > :nth-child(4), .hero-copy > :nth-child(4) { animation-delay: 0.24s; }
+.hero-copy > :nth-child(5), .hero-visual { animation-delay: 0.32s; }
+
+.landing svg,
+.hero svg { stroke-width: 1.4; }
+
+/* Lencana kecil di atas judul. Di hero ia membawa keadaan toko yang
+   sebenarnya (buka/tutup dihitung dari jam), bukan mengulang judul. */
+.eyebrow-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--shell);
+  box-shadow: 0 0 0 1px var(--shell-ring);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--st-teal);
+}
+
+.hero-copy .eyebrow-tag { align-self: flex-start; width: max-content; max-width: 100%; }
+.eyebrow-tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.eyebrow-tag.tutup { color: var(--muted); }
+.eyebrow-tag.tutup i { background: var(--muted); }
+
+/* --- Landing --- */
+.landing { width: min(600px, 100%); gap: clamp(28px, 6vw, 44px); }
+.landing-hero { gap: 14px; }
+
+.landing-hero h1 {
+  font-size: clamp(36px, 10vw, 56px);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.landing-options { gap: 14px; }
+
+/* Bingkai ganda tanpa elemen tambahan: tombol adalah intinya, cangkang luar
+   digambar sebagai cincin 6 px di sekelilingnya (margin memberi tempat). */
+.landing-card,
+.landing-card.primary-card {
+  grid-template-columns: 48px minmax(0, 1fr) 40px;
+  width: auto;
+  margin: 6px;
+  padding: 20px 18px;
+  border: 0;
+  border-radius: calc(2rem - 6px);
+  box-shadow: var(--core-highlight), 0 0 0 6px var(--shell), 0 0 0 7px var(--shell-ring), var(--ambient);
+  transition: transform 0.6s var(--ease-fluid), box-shadow 0.6s var(--ease-fluid);
+}
+
+/* Menang atas aturan lama yang mematikan bayangan kartu biasa. */
+.landing-card:not(.primary-card) {
+  box-shadow: var(--core-highlight), 0 0 0 6px var(--shell), 0 0 0 7px var(--shell-ring), var(--ambient);
+}
+
+.landing-card.primary-card {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), 0 0 0 6px var(--shell), 0 0 0 7px var(--shell-ring), var(--ambient);
+}
+
+.landing-card:hover,
+.landing-card.primary-card:hover {
+  transform: translateY(-3px);
+  border-color: transparent;
+}
+
+.landing-card:active { transform: scale(0.98); }
+
+.landing-icon { border-radius: 50%; }
+
+/* Panah di lingkarannya sendiri; bergeser saat kartu disentuh. */
+.landing-go {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--shell);
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 1;
+  transition: transform 0.6s var(--ease-fluid);
+}
+
+.primary-card .landing-go { background: rgba(0, 0, 0, 0.18); } /* lingkaran gelap: panah putih tetap kontras */
+.landing-card:hover .landing-go { transform: translateX(4px) scale(1.05); }
+
+.landing-track {
+  border: 0;
+  border-radius: 1.25rem;
+  background: var(--shell);
+  box-shadow: 0 0 0 1px var(--shell-ring);
+}
+
+/* --- Hero toko --- */
+.hero {
+  background: var(--paper);
+  padding-top: clamp(48px, 9vw, 128px);
+  padding-bottom: clamp(48px, 9vw, 128px);
+}
+
+.hero h1 { margin: 20px 0 24px; }
+
+.pill-cta {
+  border-radius: 999px;
+  padding: 8px 8px 8px 26px;
+  gap: 16px;
+  justify-content: space-between; /* di ponsel tombolnya selebar layar: ikon rata kanan */
+  transition: transform 0.6s var(--ease-fluid), background 0.6s var(--ease-fluid), box-shadow 0.6s var(--ease-fluid);
+}
+
+.pill-cta:hover:not(:disabled) { transform: none; }
+.pill-cta:active:not(:disabled) { transform: scale(0.98); }
+
+.cta-orb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 16px;
+  font-weight: 500;
+  transition: transform 0.6s var(--ease-fluid);
+}
+
+.pill-cta:hover .cta-orb { transform: translateY(3px) scale(1.05); }
+
+/* Gambar hero: cangkang + inti, tanpa gumpalan miring di belakangnya. */
+.hero-visual {
+  padding: 8px;
+  border-radius: 2.25rem;
+  background: var(--shell);
+  box-shadow: 0 0 0 1px var(--shell-ring), var(--ambient);
+}
+
+.hero-visual::before { display: none; }
+
+.hero-visual img {
+  border-radius: calc(2.25rem - 8px);
+  box-shadow: var(--core-highlight);
+}
+
 /* Layar sentuh berapa pun lebarnya: target minimal 44 px. */
 @media (pointer: coarse) {
   .admin-content .row-actions button,

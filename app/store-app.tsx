@@ -389,8 +389,8 @@ function LandingView({ pilih, demo }: { pilih: (peran: "guest" | "member" | "adm
   return <main className="landing">
     <section className="landing-hero">
       <span className="brand-mark landing-mark"><Icon name="drop" size={28} /></span>
+      <span className="eyebrow-tag">Distributor es kristal &amp; depot air minum</span>
       <h1>Ardines Group</h1>
-      <p className="landing-tagline">Distributor Es Kristal &amp; Depot Air Minum</p>
       <p className="landing-sub">Es kristal, air galon, dan air botol untuk rumah, warung, dan usaha kuliner. Pilih cara Anda masuk.</p>
     </section>
 
@@ -435,8 +435,8 @@ function ShopView({ products, status, retry, categories, category, setCategory, 
   const buka = tokoBuka();
   return <main>
     <section className="hero">
-      <div className="hero-copy"><h1>Es kristal &amp; air minum.<br/><em>Stok aman tiap hari.</em></h1><p>Distributor es kristal dan depot air minum untuk rumah, warung, dan usaha kuliner. Bisa ecer, bisa partai, langsung diantar.</p><div className="hero-actions"><button className="primary" onClick={() => document.getElementById("katalog")?.scrollIntoView({ behavior: "smooth" })}>Lihat katalog</button><div className="mini-proof"><span>✓</span><p><b>Tanpa login</b><small>Cukup nama, nomor WhatsApp, dan alamat</small></p></div></div><div className="hero-stats"><div><b>7 hari</b><span>buka {JAM_BUKA_TEKS}–{JAM_TUTUP_TEKS} WIB</span></div><div><b>120+</b><span>pelanggan rutin</span></div><div><b>Grosir</b><span>dan eceran dilayani</span></div></div></div>
-      <div className="hero-visual"><NextImage src="/og.webp" width={1200} height={675} priority alt="Pengantaran es kristal, air galon, dan air botol Ardines Group"/><div className={buka ? "floating-card" : "floating-card tutup"}><span className="pulse"></span><p><b>{buka ? "Toko sedang buka" : "Toko sedang tutup"}</b><small>{buka ? `Tutup pukul ${JAM_TUTUP_TEKS} WIB` : `Buka lagi pukul ${JAM_BUKA_TEKS} WIB`}</small></p></div></div>
+      <div className="hero-copy"><span className={buka ? "eyebrow-tag" : "eyebrow-tag tutup"}><i aria-hidden="true"></i>{buka ? `Toko sedang buka · tutup pukul ${JAM_TUTUP_TEKS} WIB` : `Toko sedang tutup · buka lagi pukul ${JAM_BUKA_TEKS} WIB`}</span><h1>Es kristal &amp; air minum.<br/><em>Stok aman tiap hari.</em></h1><p>Distributor es kristal dan depot air minum untuk rumah, warung, dan usaha kuliner. Bisa ecer, bisa partai, langsung diantar.</p><div className="hero-actions"><button className="primary pill-cta" onClick={() => document.getElementById("katalog")?.scrollIntoView({ behavior: "smooth" })}>Lihat katalog<span className="cta-orb" aria-hidden="true">↓</span></button><div className="mini-proof"><span>✓</span><p><b>Tanpa login</b><small>Cukup nama, nomor WhatsApp, dan alamat</small></p></div></div><div className="hero-stats"><div><b>7 hari</b><span>buka {JAM_BUKA_TEKS}–{JAM_TUTUP_TEKS} WIB</span></div><div><b>120+</b><span>pelanggan rutin</span></div><div><b>Grosir</b><span>dan eceran dilayani</span></div></div></div>
+      <div className="hero-visual"><NextImage src="/og.webp" width={1200} height={675} priority alt="Pengantaran es kristal, air galon, dan air botol Ardines Group"/></div>
     </section>
     <section className="service-strip"><div><Icon name="truck"/><p><b>Antar cepat</b><span>Area sekitar toko</span></p></div><div><Icon name="check"/><p><b>Stok terpantau</b><span>Sisa stok tampil di tiap produk</span></p></div><div><Icon name="wallet"/><p><b>Bayar fleksibel</b><span>Tunai, transfer, QRIS</span></p></div></section>
     <section className="catalog-section" id="katalog"><div className="section-heading"><div><h2>Pilih kebutuhanmu</h2></div><label className="search-box"><Icon name="search"/><input type="search" inputMode="search" autoComplete="off" autoCapitalize="none" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari produk..." /></label></div>
